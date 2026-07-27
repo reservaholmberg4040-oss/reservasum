@@ -13,13 +13,16 @@ function buildMonthlyReport(period) {
   for (const r of rows) {
     const key = r.unidad;
     if (!totalsMap[key]) {
-      totalsMap[key] = { unidad: r.unidad, piso: r.piso, dto: r.dto, propietario: r.propietario, turnos_dia: 0, turnos_noche: 0, total_turnos: 0 };
+      totalsMap[key] = { unidad: r.unidad, piso: r.piso, dto: r.dto, propietario: r.propietario, turnos_dia: 0, turnos_noche: 0, total_turnos: 0, fechas: [] };
     }
     if (r.turno === 'dia') totalsMap[key].turnos_dia++;
     else totalsMap[key].turnos_noche++;
     totalsMap[key].total_turnos++;
+    totalsMap[key].fechas.push(`${r.date} (${r.turno === 'dia' ? 'Día' : 'Noche'})`);
   }
-  const totalsByUnit = Object.values(totalsMap).sort((a, b) => a.unidad.localeCompare(b.unidad));
+  const totalsByUnit = Object.values(totalsMap)
+    .map(t => ({ ...t, fechas: t.fechas.sort() }))
+    .sort((a, b) => a.unidad.localeCompare(b.unidad));
 
   const detailSheetData = rows.map(r => ({
     Fecha: r.date,
@@ -39,7 +42,8 @@ function buildMonthlyReport(period) {
     Propietario: t.propietario,
     'Turnos Día': t.turnos_dia,
     'Turnos Noche': t.turnos_noche,
-    'Total Turnos': t.total_turnos
+    'Total Turnos': t.total_turnos,
+    'Días reservados': t.fechas.join(', ')
   }));
 
   const wb = XLSX.utils.book_new();
