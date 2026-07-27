@@ -1,0 +1,214 @@
+{
+  "units": [
+    {
+      "id": 1,
+      "unidad": "0001",
+      "piso": "PB",
+      "dto": "LOCAL",
+      "propietario": "LINARES, EDUARDO"
+    },
+    {
+      "id": 2,
+      "unidad": "0002",
+      "piso": "1",
+      "dto": "A",
+      "propietario": "CANTON, MARCELO JORGE"
+    },
+    {
+      "id": 3,
+      "unidad": "0003",
+      "piso": "1",
+      "dto": "B",
+      "propietario": "IRURTIA, MARIA CECILIA"
+    },
+    {
+      "id": 4,
+      "unidad": "0004",
+      "piso": "1",
+      "dto": "C",
+      "propietario": "BECCHI, MARCELO MARTIN"
+    },
+    {
+      "id": 5,
+      "unidad": "0005",
+      "piso": "1",
+      "dto": "D",
+      "propietario": "MARTINEZ, MAYRA BELEN"
+    },
+    {
+      "id": 6,
+      "unidad": "0006",
+      "piso": "2",
+      "dto": "A",
+      "propietario": "PERRELLA, ORIANA SOFIA"
+    },
+    {
+      "id": 7,
+      "unidad": "0007",
+      "piso": "2",
+      "dto": "B",
+      "propietario": "DE GENNARO, MARIANA"
+    },
+    {
+      "id": 8,
+      "unidad": "0008",
+      "piso": "2",
+      "dto": "C",
+      "propietario": "AZZATO, VALERIA"
+    },
+    {
+      "id": 9,
+      "unidad": "0009",
+      "piso": "2",
+      "dto": "D",
+      "propietario": "GIAMBRUNI, FLORENCIA"
+    },
+    {
+      "id": 10,
+      "unidad": "0010",
+      "piso": "3",
+      "dto": "A",
+      "propietario": "FERRERI, CRISTIAN"
+    },
+    {
+      "id": 11,
+      "unidad": "0011",
+      "piso": "3",
+      "dto": "B",
+      "propietario": "HUGHES, GUILLERMO"
+    },
+    {
+      "id": 12,
+      "unidad": "0012",
+      "piso": "3",
+      "dto": "C",
+      "propietario": "FELGUEROSO, NICOLAS"
+    },
+    {
+      "id": 13,
+      "unidad": "0013",
+      "piso": "3",
+      "dto": "D",
+      "propietario": "GIRONTE, GASTON"
+    },
+    {
+      "id": 14,
+      "unidad": "0014",
+      "piso": "4",
+      "dto": "A",
+      "propietario": "CERNADAS, JUAN FRANCISCO"
+    },
+    {
+      "id": 15,
+      "unidad": "0015",
+      "piso": "4",
+      "dto": "B",
+      "propietario": "HYLAND, PABLO"
+    },
+    {
+      "id": 16,
+      "unidad": "0016",
+      "piso": "4",
+      "dto": "C",
+      "propietario": "FRANCHINA, SILVIA CARLA"
+    },
+    {
+      "id": 17,
+      "unidad": "0017",
+      "piso": "4",
+      "dto": "D",
+      "propietario": "DE LA ARENA, JAVIER"
+    },
+    {
+      "id": 18,
+      "unidad": "0018",
+      "piso": "5",
+      "dto": "A",
+      "propietario": "MUÑOZ, CLAUDIA"
+    },
+    {
+      "id": 19,
+      "unidad": "0019",
+      "piso": "5",
+      "dto": "B",
+      "propietario": "MOUZO, DAMIAN"
+    },
+    {
+      "id": 20,
+      "unidad": "0020",
+      "piso": "5",
+      "dto": "C",
+      "propietario": "NAHUEL, MARIA CELIA"
+    },
+    {
+      "id": 21,
+      "unidad": "0021",
+      "piso": "6",
+      "dto": "A",
+      "propietario": "SUAREZ, CAMILA"
+    },
+    {
+      "id": 22,
+      "unidad": "0022",
+      "piso": "6",
+      "dto": "B",
+      "propietario": "MARTI, ANA MARIA ANTONIA"
+    },
+    {
+      "id": 23,
+      "unidad": "0023",
+      "piso": "6",
+      "dto": "C",
+      "propietario": "LEONARDO CALVO"
+    },
+    {
+      "id": 24,
+      "unidad": "0024",
+      "piso": "7",
+      "dto": "A",
+      "propietario": "LINARES, EDUARDO"
+    },
+    {
+      "id": 25,
+      "unidad": "0025",
+      "piso": "7",
+      "dto": "B",
+      "propietario": "LINARES, EDUARDO"
+    },
+    {
+      "id": 26,
+      "unidad": "0026",
+      "piso": "7",
+      "dto": "C",
+      "propietario": "LINARES, EDUARDO"
+    },
+    {
+      "id": 27,
+      "unidad": "0027",
+      "piso": "8",
+      "dto": "A",
+      "propietario": "LANG, MARIA CELESTE"
+    },
+    {
+      "id": 28,
+      "unidad": "0028",
+      "piso": "8",
+      "dto": "B",
+      "propietario": "AMANTO, FLORENCIA SOLEDAD"
+    }
+  ],
+  "reservations": [],
+  "admin": [
+    {
+      "id": 1,
+      "username": "admin",
+      "password_hash": "$2a$10$/gcD7N89.u4ZuBWLxf9hU.toFp1MmK11qQJT8iZIR9olpK7HL3qTi"
+    }
+  ],
+  "report_log": [],
+  "_seq": {
+    "reservations": 2,
+    "admin": 2,
+    "report_log": 1
+  }
+}

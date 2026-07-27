@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: holmberg-4040-sum
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    disk:
+      name: sum-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: DB_PATH
+        value: /var/data/db.json
+      - key: BUILDING_NAME
+        value: Holmberg 4040
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: REPORT_RECIPIENT
+        sync: false
+      - key: REPORT_DAY_OF_MONTH
+        value: 1
