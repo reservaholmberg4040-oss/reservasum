@@ -10,6 +10,11 @@ function serialize(row) {
   return rest;
 }
 
+// "Hoy" según la hora de Argentina, sin importar en qué zona horaria corra el servidor (Render usa UTC).
+function todayISOAr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); // formato YYYY-MM-DD
+}
+
 // Público: todas las reservas visibles para todo el que entra a la web (calendario transparente)
 router.get('/', (req, res) => {
   const { from, to, year } = req.query;
@@ -36,6 +41,11 @@ router.post('/', (req, res) => {
 
   const unit = db.units.byId(unit_id);
   if (!unit) return res.status(400).json({ error: 'Unidad inválida.' });
+
+  const isAdmin = !!(req.session && req.session.isAdmin);
+  if (!isAdmin && date < todayISOAr()) {
+    return res.status(400).json({ error: 'No se puede reservar en una fecha que ya pasó.' });
+  }
 
   const existing = db.reservations.findConflict(date, turno);
   if (existing) {
@@ -65,6 +75,10 @@ router.put('/:id', (req, res) => {
 
   const newDate = date || current.date;
   const newTurno = turno || current.turno;
+
+  if (!isAdmin && newDate < todayISOAr()) {
+    return res.status(400).json({ error: 'No se puede mover una reserva a una fecha que ya pasó.' });
+  }
 
   if (newDate !== current.date || newTurno !== current.turno) {
     const conflict = db.reservations.findConflict(newDate, newTurno, id);
