@@ -1,26 +1,22 @@
-const express = require('express');
-const router = express.Router();
-const db = require('../db');
-
-function publicUnit(u) {
-  const { pin, ...rest } = u;
-  return rest;
+{
+  "name": "holmberg-4040-sum",
+  "version": "1.0.0",
+  "description": "Sistema de reservas del SUM - Edificio Holmberg 4040",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-session": "^2.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.14",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
-
-// Lista pública de unidades (para el desplegable del formulario de reserva) — nunca incluye el PIN
-router.get('/', (req, res) => {
-  res.json(db.units.all().map(publicUnit));
-});
-
-// Verificar el PIN de una unidad, para poder editar/cancelar sus reservas desde "Mis reservas"
-// (funciona desde cualquier dispositivo, no depende del navegador que hizo la reserva original)
-router.post('/:id/verify-pin', (req, res) => {
-  const { pin } = req.body;
-  const unit = db.units.byId(req.params.id);
-  if (!unit) return res.status(404).json({ error: 'Unidad inválida.' });
-  const ok = db.units.verifyPin(req.params.id, pin);
-  if (!ok) return res.status(401).json({ ok: false, error: 'PIN incorrecto.' });
-  res.json({ ok: true });
-});
-
-module.exports = router;

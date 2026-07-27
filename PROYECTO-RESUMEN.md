@@ -1,78 +1,40 @@
-const nodemailer = require('nodemailer');
-const cron = require('node-cron');
-const db = require('../db');
-const { buildMonthlyReport } = require('./report');
+# SUM Holmberg 4040 — Resumen del proyecto (para retomarlo después)
 
-function getTransport() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASSWORD) return null;
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 465),
-    secure: Number(process.env.SMTP_PORT || 465) === 465,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD
-    }
-  });
-}
+## Qué es
+Web de reservas del SUM del edificio Holmberg 4040. Turno día / turno noche, calendario anual público, y un panel de administración para cobrar expensas y mandar informes por mail.
 
-async function sendMonthlyReport(period, recipientOverride) {
-  const transport = getTransport();
-  const recipient = recipientOverride || process.env.REPORT_RECIPIENT;
-  if (!transport || !recipient) {
-    throw new Error('Falta configurar SMTP_USER/SMTP_PASSWORD/REPORT_RECIPIENT en las variables de entorno.');
-  }
+## Dónde vive
+- **Código:** repositorio de GitHub (el que creaste con GitHub Desktop). Anotá acá la URL: `_______________`
+- **Deploy:** Render, servicio `holmberg-4040-sum`, plan Starter (necesario para el disco persistente y para que el envío de mail por SMTP no quede bloqueado).
+- **Disco persistente:** montado en `/var/data`, con `DB_PATH=/var/data/db.json` — ahí se guardan todas las reservas y los PINs. No se pierde entre deploys.
+- **URL pública:** la que te dio Render (tipo `https://holmberg-4040-sum.onrender.com`).
 
-  const { buffer, filename, totalsByUnit } = buildMonthlyReport(period);
+## Cómo se actualiza
+1. Editás el código localmente (o pedís los cambios en el chat de Claude).
+2. Copiás los archivos actualizados sobre la carpeta local que tiene GitHub Desktop.
+3. GitHub Desktop: Commit → Push origin.
+4. Render redeploya solo (`autoDeploy: true`).
 
-  const totalsHtml = totalsByUnit.map(t =>
-    `<tr><td>${t.unidad}</td><td>${t.piso} ${t.dto}</td><td>${t.propietario}</td><td style="text-align:center">${t.turnos_dia}</td><td style="text-align:center">${t.turnos_noche}</td><td style="text-align:center"><b>${t.total_turnos}</b></td><td>${t.fechas.join('<br>')}</td></tr>`
-  ).join('');
+## Decisiones clave de diseño
+- **Base de datos:** archivo JSON plano (`db.js`), sin dependencias nativas, para que corra en cualquier hosting sin compilar nada.
+- **Unidades:** las 28 unidades reales (piso, dto, propietario) están en `data/units.json`, extraídas de las expensas. Si cambia un propietario, se edita ese archivo (no pisa unidades ya cargadas en la base).
+- **Sistema de PIN por unidad:** cada unidad tiene un PIN de 4 dígitos (generado al azar inicialmente). Se usa para:
+  - Crear una reserva (evita que alguien reserve "en nombre" de otra unidad).
+  - Editar o cancelar una reserva, desde cualquier dispositivo (no depende del navegador que la creó).
+  - El administrador puede ver, cambiar o regenerar el PIN de cada unidad desde `/admin` (tabla "PINs de unidades").
+  - **El admin (con sesión iniciada) puede crear/editar/cancelar cualquier reserva sin necesitar el PIN** — es la excepción intencional para poder corregir cosas a mano.
+- **Calendario:** siempre público y visible para cualquiera que entre (transparencia total), aunque no esté logueado.
+- **Fechas pasadas:** no se puede reservar ni mover una reserva a una fecha que ya pasó (salvo el admin, para cargar algo retroactivo).
+- **Informe mensual:** se arma en Excel (resumen por unidad + detalle con fechas) y se manda automáticamente el día configurado (`REPORT_DAY_OF_MONTH`, por defecto el 1) a las 8:00 UTC (5 AM Argentina) al mail de `REPORT_RECIPIENT`. También se puede mandar manualmente desde el dashboard.
 
-  const html = `
-    <h2>Informe mensual de reservas del SUM — Holmberg 4040</h2>
-    <p>Período: <b>${period}</b></p>
-    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:sans-serif;font-size:13px">
-      <thead style="background:#f0f0f0"><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>Turnos Día</th><th>Turnos Noche</th><th>Total</th><th>Días reservados</th></tr></thead>
-      <tbody>${totalsHtml || '<tr><td colspan="7">Sin reservas en este período.</td></tr>'}</tbody>
-    </table>
-    <p>Se adjunta el informe completo en Excel con el detalle de cada reserva.</p>
-  `;
+## Variables de entorno (configuradas en Render → Environment)
+- `ADMIN_USER` / `ADMIN_PASSWORD` — login de `/admin`.
+- `SMTP_USER` / `SMTP_PASSWORD` (contraseña de aplicación de Gmail) / `REPORT_RECIPIENT` — envío de mail.
+- `DB_PATH=/var/data/db.json` — ubicación de los datos en el disco persistente.
+- `SESSION_SECRET` — clave para las cookies de sesión del admin.
+- `BUILDING_NAME`, `REPORT_DAY_OF_MONTH` — opcionales, ya tienen valores por defecto razonables.
 
-  await transport.sendMail({
-    from: `"SUM Holmberg 4040" <${process.env.SMTP_USER}>`,
-    to: recipient,
-    subject: `Informe de reservas SUM Holmberg 4040 - ${period}`,
-    html,
-    attachments: [{ filename, content: buffer }]
-  });
-
-  db.reportLog.add({ period, sent_at: new Date().toISOString(), recipient, status: 'enviado' });
-}
-
-function previousMonthPeriod() {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().slice(0, 7); // YYYY-MM
-}
-
-function scheduleMonthlyReport() {
-  const day = Number(process.env.REPORT_DAY_OF_MONTH || 1);
-  // Corre todos los días a las 8:00 y solo actúa si coincide el día configurado
-  cron.schedule(`0 8 * * *`, async () => {
-    const now = new Date();
-    if (now.getDate() !== day) return;
-    const period = previousMonthPeriod();
-    try {
-      await sendMonthlyReport(period);
-      console.log(`[mailer] Informe de ${period} enviado correctamente.`);
-    } catch (err) {
-      console.error('[mailer] Error enviando informe mensual:', err.message);
-      db.reportLog.add({ period, sent_at: new Date().toISOString(), recipient: process.env.REPORT_RECIPIENT || '', status: `error: ${err.message}` });
-    }
-  });
-  console.log(`[mailer] Envío automático programado: día ${day} de cada mes, 08:00.`);
-}
-
-module.exports = { sendMonthlyReport, scheduleMonthlyReport, previousMonthPeriod };
+## Problemas ya resueltos (por si vuelven a aparecer)
+- Render bloquea los puertos SMTP en el plan Free → hace falta plan Starter para que funcione el envío de mail.
+- Los discos persistentes tampoco están disponibles en el plan Free → mismo motivo, Starter es necesario.
+- Si estás logueado como admin en el mismo navegador donde probás la web pública, el sistema te reconoce como admin y salteá la validación de PIN (es esperado, no es un bug) — para probar como un vecino común, hacelo en una ventana de incógnito o cerrando sesión de admin.

@@ -94,5 +94,15 @@ router.post('/units/:id/regenerate-pin', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
+router.put('/units/:id/propietario', requireAdmin, (req, res) => {
+  const { propietario } = req.body;
+  if (!propietario || !propietario.trim()) {
+    return res.status(400).json({ error: 'El propietario no puede quedar vacío.' });
+  }
+  const unit = db.units.setPropietario(req.params.id, propietario);
+  if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
+  res.json(unit);
+});
+
 module.exports = router;
 module.exports.requireAdmin = requireAdmin;

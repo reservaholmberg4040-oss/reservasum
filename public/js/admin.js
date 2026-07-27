@@ -74,7 +74,6 @@ async function loadDashboard(periodOrEvent) {
   const period = typeof periodOrEvent === 'string' ? periodOrEvent : document.getElementById('periodSelect').value;
   const data = await fetch(`/api/admin/dashboard?period=${period}`).then(r => r.json());
 
-  // Poblar selector de períodos (incluye el actual aunque no tenga reservas)
   const sel = document.getElementById('periodSelect');
   const cp = currentPeriod();
   const periodos = Array.from(new Set([cp, ...data.periodosDisponibles])).sort().reverse();
@@ -135,26 +134,41 @@ async function loadPins() {
     <tr>
       <td>${u.unidad}</td>
       <td>${u.piso === 'PB' ? 'PB' : 'Piso ' + u.piso} ${u.dto}</td>
-      <td>${u.propietario}</td>
+      <td>
+        <input type="text" value="${(u.propietario || '').replace(/"/g, '&quot;')}" data-propietario-input="${u.id}"
+          style="width:220px;padding:6px 8px;border-radius:8px;border:1px solid var(--border)">
+      </td>
       <td>
         <input type="text" maxlength="4" pattern="\\d{4}" value="${u.pin}" data-pin-input="${u.id}"
           style="width:70px;text-align:center;font-weight:700;letter-spacing:2px;padding:6px 8px;border-radius:8px;border:1px solid var(--border)">
       </td>
       <td style="display:flex;gap:6px;">
-        <button class="btn btn-outline btn-sm" data-save-pin="${u.id}">Guardar</button>
-        <button class="btn btn-outline btn-sm" data-regen-pin="${u.id}">🎲 Nuevo</button>
+        <button class="btn btn-outline btn-sm" data-save="${u.id}">Guardar</button>
+        <button class="btn btn-outline btn-sm" data-regen-pin="${u.id}">🎲 Nuevo PIN</button>
       </td>
     </tr>`).join('');
 
-  document.querySelectorAll('[data-save-pin]').forEach(b => b.addEventListener('click', async () => {
-    const id = b.dataset.savePin;
-    const input = document.querySelector(`[data-pin-input="${id}"]`);
-    const pin = input.value.trim();
+  document.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.save;
+    const pinInput = document.querySelector(`[data-pin-input="${id}"]`);
+    const propInput = document.querySelector(`[data-propietario-input="${id}"]`);
+    const pin = pinInput.value.trim();
+    const propietario = propInput.value.trim();
+
     if (!/^\d{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'error'); return; }
-    const res = await fetch(`/api/admin/units/${id}/pin`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
-    });
-    if (res.ok) toast('PIN actualizado ✔', 'success'); else toast('No se pudo actualizar', 'error');
+    if (!propietario) { toast('El propietario no puede quedar vacío', 'error'); return; }
+
+    const [resPin, resProp] = await Promise.all([
+      fetch(`/api/admin/units/${id}/pin`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+      }),
+      fetch(`/api/admin/units/${id}/propietario`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propietario })
+      })
+    ]);
+
+    if (resPin.ok && resProp.ok) { toast('Unidad actualizada ✔', 'success'); loadDashboard(document.getElementById('periodSelect').value); }
+    else toast('No se pudo actualizar', 'error');
   }));
 
   document.querySelectorAll('[data-regen-pin]').forEach(b => b.addEventListener('click', async () => {
