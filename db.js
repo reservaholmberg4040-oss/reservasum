@@ -1,185 +1,119 @@
-// Base de datos simple en archivo JSON (sin dependencias nativas -> despliega en cualquier hosting sin compilar nada).
-const fs = require('fs');
-const path = require('path');
-const bcrypt = require('bcryptjs');
-require('dotenv').config();
+const express = require('express');
+const router = express.Router();
+const db = require('../db');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'db.json');
+const TURNOS = ['dia', 'noche'];
 
-let state = {
-  units: [],
-  reservations: [],
-  admin: [],
-  report_log: [],
-  _seq: { reservations: 1, admin: 1, report_log: 1 }
-};
+function serialize(row) {
+  return row;
+}
 
-function load() {
-  if (fs.existsSync(DB_PATH)) {
-    try {
-      state = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-      state._seq = state._seq || { reservations: 1, admin: 1, report_log: 1 };
-    } catch (e) {
-      console.error('[db] Error leyendo db.json, se reinicia:', e.message);
-    }
+// "Hoy" según la hora de Argentina, sin importar en qué zona horaria corra el servidor (Render usa UTC).
+function todayISOAr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); // formato YYYY-MM-DD
+}
+
+// Público: todas las reservas visibles para todo el que entra a la web (calendario transparente)
+router.get('/', (req, res) => {
+  const { from, to, year, unit_id } = req.query;
+  let rows;
+  if (unit_id) rows = db.reservations.byUnit(unit_id);
+  else if (year) rows = db.reservations.byYear(year);
+  else if (from && to) rows = db.reservations.byRange(from, to);
+  else rows = db.reservations.all();
+  res.json(rows.map(serialize));
+});
+
+// Crear reserva
+router.post('/', (req, res) => {
+  const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
+
+  if (!date || !turno || !unit_id || !nombre || !apellido) {
+    return res.status(400).json({ error: 'Faltan datos: fecha, turno, unidad, nombre y apellido son obligatorios.' });
   }
-}
-
-function persist() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  fs.writeFileSync(DB_PATH, JSON.stringify(state, null, 2));
-}
-
-load();
-
-function generatePin() {
-  return String(Math.floor(1000 + Math.random() * 9000));
-}
-
-// --- Seed de unidades reales (desde data/units.json, extraído del PDF de expensas) ---
-function seedUnits() {
-  const unitsSeedPath = path.join(__dirname, 'data', 'units.json');
-  if (!fs.existsSync(unitsSeedPath)) return;
-  const seed = JSON.parse(fs.readFileSync(unitsSeedPath, 'utf-8'));
-  const existingCodes = new Set(state.units.map(u => u.unidad));
-  let nextId = state.units.reduce((max, u) => Math.max(max, u.id), 0) + 1;
-  for (const u of seed) {
-    if (!existingCodes.has(u.unidad)) {
-      state.units.push({ id: nextId++, unidad: u.unidad, piso: u.piso, dto: u.dto, propietario: u.propietario, pin: generatePin() });
-    }
+  if (!TURNOS.includes(turno)) {
+    return res.status(400).json({ error: 'Turno inválido.' });
   }
-}
-seedUnits();
-
-// --- Migración: asigna un PIN aleatorio a cualquier unidad que todavía no tenga uno ---
-// (cubre tanto unidades nuevas como las que ya existían en db.json antes de esta funcionalidad)
-function ensureUnitPins() {
-  let changed = false;
-  for (const u of state.units) {
-    if (!u.pin) { u.pin = generatePin(); changed = true; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'Fecha inválida.' });
   }
-  if (changed) console.log('[units] Se generaron PINs iniciales para las unidades que no tenían.');
-}
-ensureUnitPins();
 
-// --- Seed de admin desde variables de entorno ---
-// Sincroniza el usuario/contraseña del admin con las variables de entorno en cada arranque,
-// así ADMIN_USER / ADMIN_PASSWORD siempre reflejan lo configurado en el hosting (.env).
-function ensureAdmin() {
-  const user = process.env.ADMIN_USER || 'admin';
-  const pass = process.env.ADMIN_PASSWORD || 'admin123';
-  const hash = bcrypt.hashSync(pass, 10);
-  const existing = state.admin.find(a => a.username === user);
+  const unit = db.units.byId(unit_id);
+  if (!unit) return res.status(400).json({ error: 'Unidad inválida.' });
+
+  const isAdmin = !!(req.session && req.session.isAdmin);
+
+  if (!isAdmin && !db.units.verifyPin(unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. Verificá el PIN de tu unidad.' });
+  }
+
+  if (!isAdmin && date < todayISOAr()) {
+    return res.status(400).json({ error: 'No se puede reservar en una fecha que ya pasó.' });
+  }
+
+  const existing = db.reservations.findConflict(date, turno);
   if (existing) {
-    existing.password_hash = hash;
-  } else {
-    // Si cambió el usuario configurado, se reemplaza el admin anterior por el nuevo.
-    state.admin = [{ id: state._seq.admin++, username: user, password_hash: hash }];
-    console.log(`[admin] Usuario admin creado: ${user}`);
+    return res.status(409).json({
+      error: `Ese turno ya está reservado (Unidad ${existing.unit_id === unit.id ? 'propia' : 'Piso ' + unit.piso}). Elegí otro turno o día.`,
+      taken: true
+    });
   }
-}
-ensureAdmin();
-persist();
 
-// ================= API tipo "repositorio" =================
+  const row = db.reservations.create({ date, turno, unit_id: Number(unit_id), nombre: nombre.trim(), apellido: apellido.trim() });
+  res.status(201).json(serialize(row));
+});
 
-const units = {
-  all() {
-    const pisoRank = (p) => (p === 'PB' ? -1 : /^\d+$/.test(p) ? Number(p) : 99);
-    return [...state.units].sort((a, b) => pisoRank(a.piso) - pisoRank(b.piso) || a.dto.localeCompare(b.dto));
-  },
-  byId(id) {
-    return state.units.find(u => u.id === Number(id));
-  },
-  verifyPin(id, pin) {
-    const u = this.byId(id);
-    return !!u && !!pin && String(u.pin) === String(pin).trim();
-  },
-  setPin(id, pin) {
-    const u = this.byId(id);
-    if (!u) return null;
-    u.pin = String(pin).trim();
-    persist();
-    return u;
-  },
-  regeneratePin(id) {
-    const u = this.byId(id);
-    if (!u) return null;
-    u.pin = generatePin();
-    persist();
-    return u;
+// Editar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
+router.put('/:id', (req, res) => {
+  const { id } = req.params;
+  const { unit_pin, date, turno, nombre, apellido } = req.body;
+
+  const current = db.reservations.byId(id);
+  if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
+
+  const isAdmin = !!(req.session && req.session.isAdmin);
+  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. No se pudo editar la reserva.' });
   }
-};
 
-function withUnit(r) {
-  const u = units.byId(r.unit_id) || {};
-  return { ...r, unidad: u.unidad, piso: u.piso, dto: u.dto, propietario: u.propietario };
-}
+  const newDate = date || current.date;
+  const newTurno = turno || current.turno;
 
-const reservations = {
-  all() {
-    return state.reservations.map(withUnit).sort((a, b) => a.date.localeCompare(b.date) || a.turno.localeCompare(b.turno));
-  },
-  byYear(year) {
-    return this.all().filter(r => r.date.startsWith(String(year)));
-  },
-  byRange(from, to) {
-    return this.all().filter(r => r.date >= from && r.date <= to);
-  },
-  byPeriod(period) {
-    return this.all().filter(r => r.date.startsWith(period));
-  },
-  byUnit(unitId) {
-    return this.all().filter(r => r.unit_id === Number(unitId));
-  },
-  byId(id) {
-    const r = state.reservations.find(r => r.id === Number(id));
-    return r ? withUnit(r) : null;
-  },
-  findConflict(date, turno, excludeId) {
-    return state.reservations.find(r => r.date === date && r.turno === turno && r.id !== Number(excludeId));
-  },
-  create({ date, turno, unit_id, nombre, apellido }) {
-    const id = state._seq.reservations++;
-    const now = new Date().toISOString();
-    const row = { id, date, turno, unit_id: Number(unit_id), nombre, apellido, created_at: now, updated_at: null };
-    state.reservations.push(row);
-    persist();
-    return withUnit(row);
-  },
-  update(id, fields) {
-    const idx = state.reservations.findIndex(r => r.id === Number(id));
-    if (idx === -1) return null;
-    state.reservations[idx] = { ...state.reservations[idx], ...fields, updated_at: new Date().toISOString() };
-    persist();
-    return withUnit(state.reservations[idx]);
-  },
-  remove(id) {
-    const before = state.reservations.length;
-    state.reservations = state.reservations.filter(r => r.id !== Number(id));
-    persist();
-    return state.reservations.length < before;
-  },
-  distinctPeriods() {
-    const set = new Set(state.reservations.map(r => r.date.slice(0, 7)));
-    return [...set].sort().reverse();
+  if (!isAdmin && newDate < todayISOAr()) {
+    return res.status(400).json({ error: 'No se puede mover una reserva a una fecha que ya pasó.' });
   }
-};
 
-const admin = {
-  byUsername(username) {
-    return state.admin.find(a => a.username === username);
+  if (newDate !== current.date || newTurno !== current.turno) {
+    const conflict = db.reservations.findConflict(newDate, newTurno, id);
+    if (conflict) {
+      return res.status(409).json({ error: 'Ese turno ya está ocupado. Elegí otro.', taken: true });
+    }
   }
-};
 
-const reportLog = {
-  all() {
-    return [...state.report_log].sort((a, b) => b.sent_at.localeCompare(a.sent_at)).slice(0, 50);
-  },
-  add({ period, sent_at, recipient, status }) {
-    state.report_log.push({ id: state._seq.report_log++, period, sent_at, recipient, status });
-    persist();
+  const row = db.reservations.update(id, {
+    date: newDate,
+    turno: newTurno,
+    nombre: nombre || current.nombre,
+    apellido: apellido || current.apellido
+  });
+  res.json(serialize(row));
+});
+
+// Cancelar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
+router.delete('/:id', (req, res) => {
+  const { id } = req.params;
+  const unit_pin = (req.body && req.body.unit_pin) || req.query.unit_pin;
+
+  const current = db.reservations.byId(id);
+  if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
+
+  const isAdmin = !!(req.session && req.session.isAdmin);
+  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. No se pudo cancelar la reserva.' });
   }
-};
 
-module.exports = { units, reservations, admin, reportLog };
+  db.reservations.remove(id);
+  res.json({ ok: true });
+});
+
+module.exports = router;

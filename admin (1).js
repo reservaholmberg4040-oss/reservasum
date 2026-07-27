@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUM Holmberg 4040 — Reservas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-icon">🏢</div>
+      <div class="brand-text">
+        <h1 id="buildingName">Holmberg 4040</h1>
+        <p>Reservas del SUM</p>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="active" data-tab="calendario">Calendario</a>
+      <a href="#" data-tab="misreservas">Mis reservas</a>
+      <a href="/admin">Administración</a>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- TAB: Calendario -->
+  <div id="tab-calendario">
+    <div class="page-title">
+      <div>
+        <h2>Calendario de reservas</h2>
+        <p>Hacé click en un día para ver o reservar el turno día/noche del SUM.</p>
+      </div>
+      <div class="year-switcher">
+        <button id="prevYear">‹</button>
+        <span id="yearLabel">2026</span>
+        <button id="nextYear">›</button>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-bottom:18px;">
+      <span><i class="dot dia"></i> Turno día ocupado</span>
+      <span><i class="dot noche"></i> Turno noche ocupado</span>
+      <span><i class="dot libre"></i> Turnos libres</span>
+    </div>
+
+    <div class="year-grid" id="yearGrid"></div>
+  </div>
+
+  <!-- TAB: Mis reservas -->
+  <div id="tab-misreservas" style="display:none">
+    <div class="page-title">
+      <div>
+        <h2>Mis reservas</h2>
+        <p>Elegí tu unidad e ingresá su PIN de 4 dígitos para ver, editar o cancelar sus reservas (funciona desde cualquier dispositivo).</p>
+      </div>
+    </div>
+
+    <div class="login-card" id="pinAccessCard" style="max-width:420px;margin:0 0 24px;">
+      <div id="pinAlert"></div>
+      <form id="pinForm">
+        <div class="form-group">
+          <label>Unidad</label>
+          <select id="misUnitSelect" required></select>
+        </div>
+        <div class="form-group">
+          <label>PIN de la unidad</label>
+          <input type="text" id="misPinInput" maxlength="4" inputmode="numeric" placeholder="••••" required style="letter-spacing:6px;text-align:center;font-weight:700;">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Acceder</button>
+      </form>
+    </div>
+
+    <div id="pinUnlockedWrap" style="display:none">
+      <div class="page-title" style="margin-bottom:14px;">
+        <div><h3 id="misUnitTitle" style="margin:0"></h3></div>
+        <button class="btn btn-outline btn-sm" id="misLockBtn">Salir</button>
+      </div>
+      <div class="mr-list" id="misReservasList"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Día seleccionado -->
+<div class="overlay" id="dayOverlay">
+  <div class="modal" style="position:relative;max-width:520px;">
+    <button class="modal-close" id="closeDayModal">✕</button>
+    <h3 id="dayModalTitle">Día</h3>
+    <p class="sub" id="dayModalSub"></p>
+    <div id="turnosContainer"></div>
+  </div>
+</div>
+
+<!-- Modal: Formulario de reserva -->
+<div class="overlay" id="formOverlay">
+  <div class="modal" style="position:relative;">
+    <button class="modal-close" id="closeFormModal">✕</button>
+    <h3>Reservar turno</h3>
+    <p class="sub" id="formModalSub"></p>
+    <div id="formAlert"></div>
+    <form id="reservaForm">
+      <div class="form-group">
+        <label>Unidad</label>
+        <select id="unitSelect" required></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nombre</label>
+          <input type="text" id="nombreInput" required placeholder="Nombre">
+        </div>
+        <div class="form-group">
+          <label>Apellido</label>
+          <input type="text" id="apellidoInput" required placeholder="Apellido">
+        </div>
+      </div>
+      <input type="hidden" id="reservaDate">
+      <input type="hidden" id="reservaTurno">
+      <input type="hidden" id="reservaEditId">
+      <input type="hidden" id="reservaUnitPin">
+      <button type="submit" class="btn btn-primary btn-block" id="submitReservaBtn">Confirmar reserva</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

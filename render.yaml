@@ -1,37 +1,29 @@
-services:
-  - type: web
-    name: holmberg-4040-sum
-    runtime: node
-    plan: starter
-    buildCommand: npm install
-    startCommand: npm start
-    autoDeploy: true
-    disk:
-      name: sum-data
-      mountPath: /var/data
-      sizeGB: 1
-    envVars:
-      - key: PORT
-        value: 3000
-      - key: DB_PATH
-        value: /var/data/db.json
-      - key: BUILDING_NAME
-        value: Holmberg 4040
-      - key: ADMIN_USER
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: SESSION_SECRET
-        generateValue: true
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: 465
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: REPORT_RECIPIENT
-        sync: false
-      - key: REPORT_DAY_OF_MONTH
-        value: 1
+# Copia este archivo como .env y completá los valores reales antes de desplegar
+
+# Puerto del servidor (Render lo asigna solo, no hace falta tocarlo en producción)
+PORT=3000
+
+# Nombre del edificio / consorcio
+BUILDING_NAME=Holmberg 4040
+
+# --- Administrador ---
+# Usuario y contraseña para entrar al panel de administración (/admin)
+ADMIN_USER=admin
+ADMIN_PASSWORD=cambiar-esta-clave
+
+# Clave secreta para firmar las cookies de sesión del admin (poné cualquier texto largo y random)
+SESSION_SECRET=cambiar-por-un-texto-largo-random
+
+# --- Envío de mail mensual ---
+# Cuenta de Gmail que ENVIA el informe (necesita una "contraseña de aplicación" de Google,
+# no la contraseña normal de la cuenta: https://myaccount.google.com/apppasswords)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=tu-cuenta@gmail.com
+SMTP_PASSWORD=contraseña-de-aplicacion-de-16-letras
+
+# Mail que RECIBE el informe mensual (puede ser el mismo u otro)
+REPORT_RECIPIENT=administracion@estudioromanodiego.com.ar
+
+# Día del mes en que se envía el informe automático (1-28)
+REPORT_DAY_OF_MONTH=1

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — SUM Holmberg 4040</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-icon">🛠️</div>
+      <div class="brand-text">
+        <h1>Panel de Administración</h1>
+        <p id="buildingName">Holmberg 4040</p>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="/">Ver calendario público</a>
+      <button id="logoutBtn" style="display:none">Cerrar sesión</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- LOGIN -->
+  <div class="login-wrap" id="loginWrap">
+    <div class="login-card">
+      <h2>Ingresar</h2>
+      <p class="sub" style="margin-top:-10px;color:var(--text-muted);font-size:13px;">Acceso exclusivo para la administración del consorcio.</p>
+      <div id="loginAlert"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Usuario</label>
+          <input type="text" id="loginUser" required>
+        </div>
+        <div class="form-group">
+          <label>Contraseña</label>
+          <input type="password" id="loginPass" required>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboardWrap" style="display:none">
+
+    <div class="page-title">
+      <div>
+        <h2>Dashboard de reservas</h2>
+        <p>Resumen mensual por unidad — usalo para facturar el uso del SUM en las expensas.</p>
+      </div>
+      <div class="toolbar">
+        <select id="periodSelect"></select>
+        <button class="btn btn-outline" id="downloadBtn">⬇ Descargar Excel</button>
+        <button class="btn btn-primary" id="sendMailBtn">✉ Enviar informe por mail</button>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Reservas en el período</div>
+        <div class="value" id="statTotalReservas">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Unidades que usaron el SUM</div>
+        <div class="value" id="statUnidadesActivas">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total de unidades del edificio</div>
+        <div class="value" id="statTotalUnidades">0</div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <h3>Resumen por unidad (para cobrar expensas)</h3>
+      <table>
+        <thead><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>Turnos Día</th><th>Turnos Noche</th><th>Total</th></tr></thead>
+        <tbody id="resumenBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Todas las reservas del período</h3>
+      <table>
+        <thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Reservado por</th><th>Acciones</th></tr></thead>
+        <tbody id="reservasBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>Historial de envíos de mail</h3>
+      <table>
+        <thead><tr><th>Período</th><th>Enviado</th><th>Destinatario</th><th>Estado</th></tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <h3>PINs de unidades</h3>
+      <p class="sub" style="margin-top:-6px">Cada unidad usa este PIN de 4 dígitos para editar o cancelar sus propias reservas desde "Mis reservas" (funciona desde cualquier dispositivo). Se generaron aleatoriamente al crear el sistema — comunicáselo a cada propietario.</p>
+      <table>
+        <thead><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>PIN</th><th>Acciones</th></tr></thead>
+        <tbody id="pinsBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="/js/admin.js"></script>
+</body>
+</html>
