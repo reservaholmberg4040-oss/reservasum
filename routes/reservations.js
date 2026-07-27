@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 
 const TURNOS = ['dia', 'noche'];
 
 function serialize(row) {
-  const { edit_token, ...rest } = row;
-  return rest;
+  return row;
 }
 
 // "Hoy" según la hora de Argentina, sin importar en qué zona horaria corra el servidor (Render usa UTC).
@@ -17,9 +15,10 @@ function todayISOAr() {
 
 // Público: todas las reservas visibles para todo el que entra a la web (calendario transparente)
 router.get('/', (req, res) => {
-  const { from, to, year } = req.query;
+  const { from, to, year, unit_id } = req.query;
   let rows;
-  if (year) rows = db.reservations.byYear(year);
+  if (unit_id) rows = db.reservations.byUnit(unit_id);
+  else if (year) rows = db.reservations.byYear(year);
   else if (from && to) rows = db.reservations.byRange(from, to);
   else rows = db.reservations.all();
   res.json(rows.map(serialize));
@@ -55,22 +54,21 @@ router.post('/', (req, res) => {
     });
   }
 
-  const edit_token = uuidv4();
-  const row = db.reservations.create({ date, turno, unit_id: Number(unit_id), nombre: nombre.trim(), apellido: apellido.trim(), edit_token });
-  res.status(201).json({ ...serialize(row), edit_token });
+  const row = db.reservations.create({ date, turno, unit_id: Number(unit_id), nombre: nombre.trim(), apellido: apellido.trim() });
+  res.status(201).json(serialize(row));
 });
 
-// Editar reserva propia (requiere edit_token) o admin (req.session.isAdmin)
+// Editar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { edit_token, date, turno, nombre, apellido } = req.body;
+  const { unit_pin, date, turno, nombre, apellido } = req.body;
 
   const current = db.reservations.byId(id);
   if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
 
   const isAdmin = !!(req.session && req.session.isAdmin);
-  if (!isAdmin && current.edit_token !== edit_token) {
-    return res.status(403).json({ error: 'No tenés permiso para editar esta reserva.' });
+  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. No se pudo editar la reserva.' });
   }
 
   const newDate = date || current.date;
@@ -96,17 +94,17 @@ router.put('/:id', (req, res) => {
   res.json(serialize(row));
 });
 
-// Cancelar reserva propia (requiere edit_token) o admin
+// Cancelar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
 router.delete('/:id', (req, res) => {
   const { id } = req.params;
-  const edit_token = (req.body && req.body.edit_token) || req.query.edit_token;
+  const unit_pin = (req.body && req.body.unit_pin) || req.query.unit_pin;
 
   const current = db.reservations.byId(id);
   if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
 
   const isAdmin = !!(req.session && req.session.isAdmin);
-  if (!isAdmin && current.edit_token !== edit_token) {
-    return res.status(403).json({ error: 'No tenés permiso para cancelar esta reserva.' });
+  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. No se pudo cancelar la reserva.' });
   }
 
   db.reservations.remove(id);

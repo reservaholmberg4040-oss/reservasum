@@ -32,6 +32,10 @@ function persist() {
 
 load();
 
+function generatePin() {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 // --- Seed de unidades reales (desde data/units.json, extraído del PDF de expensas) ---
 function seedUnits() {
   const unitsSeedPath = path.join(__dirname, 'data', 'units.json');
@@ -41,11 +45,22 @@ function seedUnits() {
   let nextId = state.units.reduce((max, u) => Math.max(max, u.id), 0) + 1;
   for (const u of seed) {
     if (!existingCodes.has(u.unidad)) {
-      state.units.push({ id: nextId++, unidad: u.unidad, piso: u.piso, dto: u.dto, propietario: u.propietario });
+      state.units.push({ id: nextId++, unidad: u.unidad, piso: u.piso, dto: u.dto, propietario: u.propietario, pin: generatePin() });
     }
   }
 }
 seedUnits();
+
+// --- Migración: asigna un PIN aleatorio a cualquier unidad que todavía no tenga uno ---
+// (cubre tanto unidades nuevas como las que ya existían en db.json antes de esta funcionalidad)
+function ensureUnitPins() {
+  let changed = false;
+  for (const u of state.units) {
+    if (!u.pin) { u.pin = generatePin(); changed = true; }
+  }
+  if (changed) console.log('[units] Se generaron PINs iniciales para las unidades que no tenían.');
+}
+ensureUnitPins();
 
 // --- Seed de admin desde variables de entorno ---
 // Sincroniza el usuario/contraseña del admin con las variables de entorno en cada arranque,
@@ -75,6 +90,24 @@ const units = {
   },
   byId(id) {
     return state.units.find(u => u.id === Number(id));
+  },
+  verifyPin(id, pin) {
+    const u = this.byId(id);
+    return !!u && !!pin && String(u.pin) === String(pin).trim();
+  },
+  setPin(id, pin) {
+    const u = this.byId(id);
+    if (!u) return null;
+    u.pin = String(pin).trim();
+    persist();
+    return u;
+  },
+  regeneratePin(id) {
+    const u = this.byId(id);
+    if (!u) return null;
+    u.pin = generatePin();
+    persist();
+    return u;
   }
 };
 
@@ -96,6 +129,9 @@ const reservations = {
   byPeriod(period) {
     return this.all().filter(r => r.date.startsWith(period));
   },
+  byUnit(unitId) {
+    return this.all().filter(r => r.unit_id === Number(unitId));
+  },
   byId(id) {
     const r = state.reservations.find(r => r.id === Number(id));
     return r ? withUnit(r) : null;
@@ -103,10 +139,10 @@ const reservations = {
   findConflict(date, turno, excludeId) {
     return state.reservations.find(r => r.date === date && r.turno === turno && r.id !== Number(excludeId));
   },
-  create({ date, turno, unit_id, nombre, apellido, edit_token }) {
+  create({ date, turno, unit_id, nombre, apellido }) {
     const id = state._seq.reservations++;
     const now = new Date().toISOString();
-    const row = { id, date, turno, unit_id: Number(unit_id), nombre, apellido, edit_token, created_at: now, updated_at: null };
+    const row = { id, date, turno, unit_id: Number(unit_id), nombre, apellido, created_at: now, updated_at: null };
     state.reservations.push(row);
     persist();
     return withUnit(row);

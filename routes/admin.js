@@ -73,5 +73,26 @@ router.get('/report-log', requireAdmin, (req, res) => {
   res.json(db.reportLog.all());
 });
 
+// --- Gestión de PINs por unidad ---
+router.get('/units', requireAdmin, (req, res) => {
+  res.json(db.units.all()); // acá sí se incluye el pin, es la vista de administración
+});
+
+router.put('/units/:id/pin', requireAdmin, (req, res) => {
+  const { pin } = req.body;
+  if (!/^\d{4}$/.test(String(pin || ''))) {
+    return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos numéricos.' });
+  }
+  const unit = db.units.setPin(req.params.id, pin);
+  if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
+  res.json(unit);
+});
+
+router.post('/units/:id/regenerate-pin', requireAdmin, (req, res) => {
+  const unit = db.units.regeneratePin(req.params.id);
+  if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
+  res.json(unit);
+});
+
 module.exports = router;
 module.exports.requireAdmin = requireAdmin;

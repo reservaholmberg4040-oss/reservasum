@@ -95,6 +95,7 @@ async function loadDashboard(periodOrEvent) {
 
   await loadReservas(data.period);
   await loadLog();
+  await loadPins();
 }
 
 async function loadReservas(period) {
@@ -126,6 +127,42 @@ async function loadLog() {
       <td>${l.recipient || '-'}</td>
       <td>${l.status.startsWith('error') ? `<span style="color:#991b1b">${l.status}</span>` : `<span style="color:#065f46">✔ ${l.status}</span>`}</td>
     </tr>`).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">Todavía no se envió ningún informe</td></tr>`;
+}
+
+async function loadPins() {
+  const units = await fetch('/api/admin/units').then(r => r.json());
+  document.getElementById('pinsBody').innerHTML = units.map(u => `
+    <tr>
+      <td>${u.unidad}</td>
+      <td>${u.piso === 'PB' ? 'PB' : 'Piso ' + u.piso} ${u.dto}</td>
+      <td>${u.propietario}</td>
+      <td>
+        <input type="text" maxlength="4" pattern="\\d{4}" value="${u.pin}" data-pin-input="${u.id}"
+          style="width:70px;text-align:center;font-weight:700;letter-spacing:2px;padding:6px 8px;border-radius:8px;border:1px solid var(--border)">
+      </td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" data-save-pin="${u.id}">Guardar</button>
+        <button class="btn btn-outline btn-sm" data-regen-pin="${u.id}">🎲 Nuevo</button>
+      </td>
+    </tr>`).join('');
+
+  document.querySelectorAll('[data-save-pin]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.savePin;
+    const input = document.querySelector(`[data-pin-input="${id}"]`);
+    const pin = input.value.trim();
+    if (!/^\d{4}$/.test(pin)) { toast('El PIN debe tener 4 dígitos', 'error'); return; }
+    const res = await fetch(`/api/admin/units/${id}/pin`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+    });
+    if (res.ok) toast('PIN actualizado ✔', 'success'); else toast('No se pudo actualizar', 'error');
+  }));
+
+  document.querySelectorAll('[data-regen-pin]').forEach(b => b.addEventListener('click', async () => {
+    const id = b.dataset.regenPin;
+    if (!confirm('¿Generar un PIN nuevo para esta unidad? El anterior dejará de funcionar.')) return;
+    const res = await fetch(`/api/admin/units/${id}/regenerate-pin`, { method: 'POST' });
+    if (res.ok) { toast('Nuevo PIN generado ✔', 'success'); loadPins(); } else toast('No se pudo regenerar', 'error');
+  }));
 }
 
 async function onSendMail() {
