@@ -26,7 +26,7 @@ router.get('/', (req, res) => {
 
 // Crear reserva
 router.post('/', (req, res) => {
-  const { date, turno, unit_id, nombre, apellido } = req.body;
+  const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
 
   if (!date || !turno || !unit_id || !nombre || !apellido) {
     return res.status(400).json({ error: 'Faltan datos: fecha, turno, unidad, nombre y apellido son obligatorios.' });
@@ -42,6 +42,11 @@ router.post('/', (req, res) => {
   if (!unit) return res.status(400).json({ error: 'Unidad inválida.' });
 
   const isAdmin = !!(req.session && req.session.isAdmin);
+
+  if (!isAdmin && !db.units.verifyPin(unit_id, unit_pin)) {
+    return res.status(403).json({ error: 'PIN incorrecto. Verificá el PIN de tu unidad.' });
+  }
+
   if (!isAdmin && date < todayISOAr()) {
     return res.status(400).json({ error: 'No se puede reservar en una fecha que ya pasó.' });
   }

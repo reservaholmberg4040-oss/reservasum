@@ -217,16 +217,20 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
   document.getElementById('reservaDate').value = date;
   document.getElementById('reservaTurno').value = turno;
   document.getElementById('reservaEditId').value = id || '';
-  document.getElementById('reservaUnitPin').value = unitPin || '';
   document.getElementById('formModalSub').textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
   document.getElementById('submitReservaBtn').textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
 
   const unitSel = document.getElementById('unitSelect');
+  const pinInput = document.getElementById('unitPinInput');
   if (mode === 'edit') {
     unitSel.value = unitId;
     unitSel.disabled = true;
+    pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
   } else {
     unitSel.disabled = false;
+    // Si ya está "desbloqueada" una unidad en Mis Reservas, se precarga para no volver a tipear el PIN.
+    pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
+    if (currentPinUnit) unitSel.value = currentPinUnit.id;
   }
   toggleOverlay('formOverlay', true);
 }
@@ -236,7 +240,7 @@ async function onSubmitReserva(e) {
   const date = document.getElementById('reservaDate').value;
   const turno = document.getElementById('reservaTurno').value;
   const editId = document.getElementById('reservaEditId').value;
-  const unit_pin = document.getElementById('reservaUnitPin').value;
+  const unit_pin = document.getElementById('unitPinInput').value.trim();
   const unit_id = Number(document.getElementById('unitSelect').value);
   const nombre = document.getElementById('nombreInput').value.trim();
   const apellido = document.getElementById('apellidoInput').value.trim();
@@ -244,6 +248,7 @@ async function onSubmitReserva(e) {
   alertBox.innerHTML = '';
 
   if (!unit_id) { alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; return; }
+  if (!/^\d{4}$/.test(unit_pin)) { alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; return; }
 
   try {
     let res, data;
@@ -260,11 +265,13 @@ async function onSubmitReserva(e) {
       res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, turno, unit_id, nombre, apellido })
+        body: JSON.stringify({ date, turno, unit_id, nombre, apellido, unit_pin })
       });
       data = await res.json();
       if (!res.ok) throw data;
       toast('¡Turno reservado con éxito! 🎉', 'success');
+      // Recordamos la unidad+PIN para esta sesión, así no hay que volver a tipearlo en la próxima reserva.
+      currentPinUnit = { id: unit_id, pin: unit_pin };
     }
     toggleOverlay('formOverlay', false);
     await loadYear(currentYear);
