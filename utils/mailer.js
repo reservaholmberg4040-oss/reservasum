@@ -26,15 +26,15 @@ async function sendMonthlyReport(period, recipientOverride) {
   const { buffer, filename, totalsByUnit } = buildMonthlyReport(period);
 
   const totalsHtml = totalsByUnit.map(t =>
-    `<tr><td>${t.unidad}</td><td>${t.piso} ${t.dto}</td><td>${t.propietario}</td><td style="text-align:center">${t.turnos_dia}</td><td style="text-align:center">${t.turnos_noche}</td><td style="text-align:center"><b>${t.total_turnos}</b></td></tr>`
+    `<tr><td>${t.unidad}</td><td>${t.piso} ${t.dto}</td><td>${t.propietario}</td><td style="text-align:center">${t.turnos_dia}</td><td style="text-align:center">${t.turnos_noche}</td><td style="text-align:center"><b>${t.total_turnos}</b></td><td>${t.fechas.join('<br>')}</td></tr>`
   ).join('');
 
   const html = `
     <h2>Informe mensual de reservas del SUM — Holmberg 4040</h2>
     <p>Período: <b>${period}</b></p>
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:sans-serif;font-size:13px">
-      <thead style="background:#f0f0f0"><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>Turnos Día</th><th>Turnos Noche</th><th>Total</th></tr></thead>
-      <tbody>${totalsHtml || '<tr><td colspan="6">Sin reservas en este período.</td></tr>'}</tbody>
+      <thead style="background:#f0f0f0"><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>Turnos Día</th><th>Turnos Noche</th><th>Total</th><th>Días reservados</th></tr></thead>
+      <tbody>${totalsHtml || '<tr><td colspan="7">Sin reservas en este período.</td></tr>'}</tbody>
     </table>
     <p>Se adjunta el informe completo en Excel con el detalle de cada reserva.</p>
   `;
