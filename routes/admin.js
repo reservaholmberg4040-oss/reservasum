@@ -1,15 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const xlsx = require('xlsx');
 const db = require('../db');
 const { buildMonthlyReport } = require('../utils/report');
 const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 function requireAdmin(req, res, next) {
   if (req.session && req.session.isAdmin) return next();
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
+// --- Autenticación ---
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
   const adminUser = db.admin.byUsername(username);
@@ -33,7 +38,7 @@ router.get('/me', (req, res) => {
   res.json({ isAdmin: false });
 });
 
-// --- Dashboard: estadísticas por unidad y mes (para cobrar expensas) ---
+// --- Dashboard & Informes ---
 router.get('/dashboard', requireAdmin, (req, res) => {
   const period = req.query.period || new Date().toISOString().slice(0, 7);
   const { totalsByUnit, rows } = buildMonthlyReport(period);
@@ -47,7 +52,6 @@ router.get('/dashboard', requireAdmin, (req, res) => {
   });
 });
 
-// --- Descargar informe Excel de un mes ---
 router.get('/report.xlsx', requireAdmin, (req, res) => {
   const period = req.query.period || new Date().toISOString().slice(0, 7);
   const { buffer, filename } = buildMonthlyReport(period);
@@ -56,7 +60,6 @@ router.get('/report.xlsx', requireAdmin, (req, res) => {
   res.send(buffer);
 });
 
-// --- Enviar manualmente el informe por mail (además del cron automático) ---
 router.post('/send-report', requireAdmin, async (req, res) => {
   const period = req.body.period || previousMonthPeriod();
   const recipient = req.body.recipient;
@@ -68,14 +71,13 @@ router.post('/send-report', requireAdmin, async (req, res) => {
   }
 });
 
-// --- Historial de envíos de mail ---
 router.get('/report-log', requireAdmin, (req, res) => {
   res.json(db.reportLog.all());
 });
 
-// --- Gestión de PINs por unidad ---
+// --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  res.json(db.units.all()); // acá sí se incluye el pin, es la vista de administración
+  res.json(db.units.all());
 });
 
 router.put('/units/:id/pin', requireAdmin, (req, res) => {
@@ -102,6 +104,73 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   const unit = db.units.setPropietario(req.params.id, propietario);
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
+});
+
+// --- NUEVOS ENDPOINTS: Importar Excel, Agregar y Eliminar ---
+router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
+
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    const importedUnits = rows.map((row, index) => ({
+      unidad: String(row['Unidad'] || row['unidad'] || `00${index + 1}`),
+      piso: String(row['Piso'] || row['piso'] || 'PB'),
+      dto: String(row['Depto'] || row['dto'] || row['DTO'] || 'A'),
+      propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
+      pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000))
+    }));
+
+    const replaceAll = req.query.replace === 'true';
+    let currentUnits = replaceAll ? [] : db.units.all();
+
+    const mergedUnits = [...currentUnits, ...importedUnits];
+    db.units.saveAll(mergedUnits);
+
+    res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al procesar la planilla Excel.' });
+  }
+});
+
+router.post('/units/add', requireAdmin, (req, res) => {
+  try {
+    const { unidad, piso, dto, propietario, pin } = req.body;
+    const currentUnits = db.units.all();
+
+    const newUnit = {
+      unidad: unidad || `00${currentUnits.length + 1}`,
+      piso: piso || 'PB',
+      dto: dto || 'A',
+      propietario: propietario || '',
+      pin: pin && /^\d{4}$/.test(pin) ? pin : Math.floor(1000 + Math.random() * 9000).toString()
+    };
+
+    currentUnits.push(newUnit);
+    db.units.saveAll(currentUnits);
+    res.json({ success: true, unit: newUnit });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al agregar la unidad.' });
+  }
+});
+
+router.delete('/units/delete', requireAdmin, (req, res) => {
+  try {
+    const { ids, deleteAll } = req.body;
+    if (deleteAll) {
+      db.units.saveAll([]);
+      return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
+    }
+
+    const currentUnits = db.units.all();
+    const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)));
+    db.units.saveAll(filteredUnits);
+    res.json({ success: true, message: 'Unidades eliminadas.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al eliminar unidades.' });
+  }
 });
 
 module.exports = router;
