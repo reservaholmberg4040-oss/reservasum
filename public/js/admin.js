@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadUnits();
     loadReportHistory();
 
-    // Logout
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
@@ -11,12 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Modal Agregar Unidad
+    // Modal para agregar unidad
     const modal = document.getElementById('add-unit-modal');
     document.getElementById('btn-open-add-modal').addEventListener('click', () => modal.classList.add('active'));
     document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
 
-    // Guardar nueva unidad
+    // Formulario de agregar unidad
     document.getElementById('add-unit-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const unidad = document.getElementById('input-unidad').value.trim();
@@ -38,20 +37,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.classList.remove('active');
                 loadUnits();
             } else {
-                alert('Error: ' + (result.error || 'No se pudo agregar la unidad.'));
+                alert('Error: ' + (result.error || 'No se pudo agregar.'));
             }
         } catch (err) {
-            alert('Error de conexión al agregar la unidad.');
+            alert('Error al conectar con el servidor.');
         }
     });
 
-    // Importar Excel
+    // Subir Excel
     document.getElementById('btn-upload-excel').addEventListener('click', async () => {
         const fileInput = document.getElementById('excel-file-input');
         const replaceAll = document.getElementById('chk-replace-all').checked;
 
         if (!fileInput.files || fileInput.files.length === 0) {
-            return alert('Por favor seleccioná un archivo Excel (.xlsx o .xls).');
+            return alert('Por favor seleccioná un archivo Excel.');
         }
 
         const formData = new FormData();
@@ -70,14 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('chk-replace-all').checked = false;
                 loadUnits();
             } else {
-                alert('Error al importar Excel: ' + (result.error || 'Ocurrió un problema.'));
+                alert('Error: ' + (result.error || 'Ocurrió un problema.'));
             }
         } catch (err) {
-            alert('Error de conexión al subir el archivo Excel.');
+            alert('Error al importar el archivo.');
         }
     });
 
-    // Checkbox seleccionar todas
+    // Seleccionar todas
     document.getElementById('select-all-units').addEventListener('change', (e) => {
         const checkboxes = document.querySelectorAll('.unit-checkbox');
         checkboxes.forEach(cb => cb.checked = e.target.checked);
@@ -106,17 +105,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('select-all-units').checked = false;
                     loadUnits();
                 } else {
-                    alert('Error: ' + (result.error || 'No se pudieron eliminar las unidades.'));
+                    alert('Error: ' + (result.error || 'No se pudieron eliminar.'));
                 }
             } catch (err) {
-                alert('Error de conexión al eliminar unidades.');
+                alert('Error al conectar con el servidor.');
             }
         }
     });
 
-    // Eliminar TODAS
+    // Eliminar TODAS las unidades
     document.getElementById('btn-delete-all').addEventListener('click', async () => {
-        const confirmStr = prompt('¡ATENCIÓN! Se borrarán TODAS las unidades.\nPara confirmar escribí "ELIMINAR":');
+        const confirmStr = prompt('¡ATENCIÓN! Se eliminarán TODAS las unidades.\nEscribí "ELIMINAR" para confirmar:');
         if (confirmStr === 'ELIMINAR') {
             try {
                 const res = await fetch('/api/units/delete', {
@@ -133,13 +132,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error: ' + (result.error || 'No se pudieron eliminar.'));
                 }
             } catch (err) {
-                alert('Error al vaciar unidades.');
+                alert('Error de conexión.');
             }
         }
     });
 });
 
-// Cargar tabla de unidades con mapeo exacto (Unidad | Piso/Dto | Propietario | PIN | Acciones)
+// Cargar tabla de unidades respetando los campos reales de la DB (unidad, piso, propietario, pin)
 async function loadUnits() {
     const tbody = document.getElementById('units-tbody');
     if (!tbody) return;
@@ -157,18 +156,20 @@ async function loadUnits() {
         units.forEach(u => {
             const tr = document.createElement('tr');
             const unitId = u.id || u.unidad;
-            const pisoDto = u.piso || (u.depto ? `Piso ${u.depto}` : '-');
+            
+            // Detectar adecuadamente el valor de Piso/Dto según como esté en la DB
+            const pisoDtoValue = u.piso || u['piso/dto'] || u.depto || '-';
 
             tr.innerHTML = `
                 <td style="text-align: center;">
                     <input type="checkbox" class="unit-checkbox" value="${unitId}">
                 </td>
                 <td><strong>${u.unidad || ''}</strong></td>
-                <td>${pisoDto}</td>
+                <td>${pisoDtoValue}</td>
                 <td>${u.propietario || ''}</td>
-                <td><code>${u.pin || '----'}</code></td>
+                <td><strong>${u.pin || '----'}</strong></td>
                 <td>
-                   <button class="btn btn-ghost btn-sm" onclick="alert('PIN de ${u.unidad}: ${u.pin}')">Ver PIN</button>
+                   <button class="btn btn-ghost btn-sm" onclick="alert('Unidad: ${u.unidad}\\nPIN: ${u.pin}')">Ver PIN</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -205,6 +206,6 @@ async function loadReportHistory() {
             tbody.appendChild(tr);
         });
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-muted">No se pudo cargar el historial.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>';
     }
 }
