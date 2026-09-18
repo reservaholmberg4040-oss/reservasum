@@ -6,19 +6,6 @@
   <title>Admin — SUM Holmberg 4040</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    .header-admin {
-      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-      color: white;
-      padding: 1.5rem 2rem;
-      border-radius: 0 0 16px 16px;
-      margin-bottom: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(29, 78, 216, 0.2);
-    }
-    .header-admin h1 { font-size: 1.5rem; margin: 0; color: white; }
-    .header-admin p { margin: 0; opacity: 0.85; font-size: 0.9rem; }
     .actions-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
     .excel-card {
       background: #f8f9fa;
@@ -49,45 +36,48 @@
   </style>
 </head>
 <body class="bg">
-  <div class="header-admin">
-    <div>
-      <h1>Panel de Administración</h1>
-      <p>Holmberg 4040</p>
-    </div>
-    <div style="display: flex; gap: 10px;">
-      <a href="/" class="btn btn-ghost" style="color: white; border-color: rgba(255,255,255,0.4);">Ver calendario público</a>
-      <button id="logout-btn" class="btn btn-ghost" type="button" style="color: white; border-color: rgba(255,255,255,0.4);">Cerrar sesión</button>
-    </div>
-  </div>
+  <div class="layout">
+    <header class="header">
+      <div class="header-brand">
+        <span class="header-logo" aria-hidden="true">🛠️</span>
+        <div>
+          <h1 class="header-title">Panel de Administración</h1>
+          <p class="header-subtitle">Holmberg 4040</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a href="/" class="btn btn-ghost">Ver calendario público</a>
+        <button id="logout-btn" class="btn btn-ghost" type="button">Cerrar sesión</button>
+      </div>
+    </header>
 
-  <div class="container" style="max-width: 1100px; margin: 0 auto; padding: 0 15px 40px 15px;">
     <main class="main">
       <!-- Informes Mensuales -->
-      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px;">
+      <section class="card admin-card">
         <div class="admin-card-header">
           <h2>Informes mensuales</h2>
           <p>Generá y enviá por mail el resumen de reservas del mes para la administración.</p>
         </div>
-        <form id="report-form" class="report-form" style="margin-top: 15px;">
-          <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-            <div class="field" style="flex: 1;">
+        <form id="report-form" class="report-form">
+          <div class="form-row">
+            <div class="field">
               <label for="month-select">Período</label>
               <input type="month" id="month-select" name="period" required>
             </div>
-            <div class="field" style="flex: 2;">
+            <div class="field">
               <label for="recipient-email">Email destinatario</label>
               <input type="email" id="recipient-email" name="recipient" placeholder="ejemplo@administracion.com" required>
             </div>
           </div>
-          <div class="form-actions" style="display: flex; gap: 10px;">
+          <div class="form-actions">
             <button type="submit" id="btn-send-report" class="btn btn-primary">Enviar informe por mail</button>
             <button type="button" id="btn-download-pdf" class="btn btn-secondary">Descargar PDF</button>
           </div>
         </form>
-        <div class="report-history" style="margin-top: 20px;">
+        <div class="report-history">
           <h3>Historial de envíos</h3>
           <div class="table-wrap">
-            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+            <table class="data-table">
               <thead>
                 <tr>
                   <th>PERÍODO</th>
@@ -97,7 +87,7 @@
                 </tr>
               </thead>
               <tbody id="history-tbody">
-                <tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>
+                <tr><td colspan="4" class="text-muted">Cargando historial...</td></tr>
               </tbody>
             </table>
           </div>
@@ -105,7 +95,7 @@
       </section>
 
       <!-- Unidades: Propietario y PIN -->
-      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+      <section class="card admin-card" style="margin-top: 24px;">
         <div class="admin-card-header">
           <h2>Unidades: propietario y PIN</h2>
           <p>Cada unidad usa un PIN de 4 dígitos para reservar y para editar/cancelar sus reservas desde "Mis reservas".</p>
@@ -119,7 +109,7 @@
 
         <div class="excel-card">
           <h3 style="margin-top: 0; font-size: 1rem;">Importar desde Excel</h3>
-          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong> (o Piso/Dto), <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
+          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong>, <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
             <input type="file" id="excel-file-input" accept=".xlsx, .xls">
             <label style="cursor: pointer; font-size: 0.9rem;">
@@ -130,7 +120,7 @@
         </div>
 
         <div class="table-wrap">
-          <table class="data-table" style="width: 100%; border-collapse: collapse;">
+          <table class="data-table">
             <thead>
               <tr>
                 <th style="width: 40px; text-align: center;">
@@ -162,15 +152,19 @@
           <input type="text" id="input-unidad" required placeholder="Ej: 0001">
         </div>
         <div class="form-group">
-          <label for="input-pisodto">Piso / Dto</label>
-          <input type="text" id="input-pisodto" required placeholder="Ej: PB LOCAL o Piso 1 A">
+          <label for="input-piso">Piso</label>
+          <input type="text" id="input-piso" required placeholder="Ej: PB o Piso 1">
+        </div>
+        <div class="form-group">
+          <label for="input-dto">Depto</label>
+          <input type="text" id="input-dto" required placeholder="Ej: LOCAL o A">
         </div>
         <div class="form-group">
           <label for="input-propietario">Propietario</label>
           <input type="text" id="input-propietario" required placeholder="Ej: LINARES, EDUARDO">
         </div>
         <div class="form-group">
-          <label for="input-pin">PIN (Opcional)</label>
+          <label for="input-pin">PIN (Opcional - 4 dígitos)</label>
           <input type="text" id="input-pin" maxlength="4" placeholder="Ej: 5456 (vacío = automático)">
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
