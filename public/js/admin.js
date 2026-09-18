@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Guardar nueva unidad
+  // Formulario Agregar Unidad
   const addForm = document.getElementById('add-unit-form');
   if (addForm) {
     addForm.addEventListener('submit', async (e) => {
@@ -42,11 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
       const pin = document.getElementById('input-pin')?.value.trim();
 
       try {
-        const res = await fetch('/api/admin/units/add', {
+        // Petición a endpoint admin
+        let res = await fetch('/api/admin/units/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ unidad, piso, dto, propietario, pin })
         });
+
+        if (res.status === 404) {
+          res = await fetch('/api/admin/add-unit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unidad, piso, dto, propietario, pin })
+          });
+        }
 
         const result = await res.json();
 
@@ -171,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Mensajes de feedback dinámicos y estilizados dentro del modal
+// Mensaje dinámico elegante en el modal
 function showModalFeedback(text, type) {
   let feedbackEl = document.getElementById('modal-feedback-alert');
   const form = document.getElementById('add-unit-form');
