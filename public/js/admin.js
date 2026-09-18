@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-open-add-modal').addEventListener('click', () => modal.classList.add('active'));
     document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
 
-    // Formulario Guardar
+    // Guardar unidad
     document.getElementById('add-unit-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const unidad = document.getElementById('input-unidad').value.trim();
@@ -37,14 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 modal.classList.remove('active');
                 loadUnits();
             } else {
-                alert('Error: ' + (result.error || 'No se pudo agregar.'));
+                alert('Error: ' + (result.error || 'No se pudo agregar la unidad.'));
             }
         } catch (err) {
             alert('Error al conectar con el servidor.');
         }
     });
 
-    // Subir Excel
+    // Cargar Excel
     document.getElementById('btn-upload-excel').addEventListener('click', async () => {
         const fileInput = document.getElementById('excel-file-input');
         const replaceAll = document.getElementById('chk-replace-all').checked;
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Seleccionar todas
+    // Checkbox seleccionar todas
     document.getElementById('select-all-units').addEventListener('change', (e) => {
         const checkboxes = document.querySelectorAll('.unit-checkbox');
         checkboxes.forEach(cb => cb.checked = e.target.checked);
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Eliminar TODAS
+    // Eliminar TODAS las unidades
     document.getElementById('btn-delete-all').addEventListener('click', async () => {
         const confirmStr = prompt('¡ATENCIÓN! Se eliminarán TODAS las unidades.\nEscribí "ELIMINAR" para confirmar:');
         if (confirmStr === 'ELIMINAR') {
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Cargar unidades mapeando adecuadamente { piso: "PB", dto: "LOCAL" } o { piso: "1", dto: "A" }
+// Cargar tabla de unidades con formateo exacto de PISO/DTO
 async function loadUnits() {
     const tbody = document.getElementById('units-tbody');
     if (!tbody) return;
@@ -157,7 +157,6 @@ async function loadUnits() {
             const tr = document.createElement('tr');
             const unitId = u.id || u.unidad;
             
-            // Construcción correcta de PISO/DTO
             let pisoDtoStr = '-';
             if (u.piso && u.dto) {
                 pisoDtoStr = u.piso.toString().startsWith('PB') ? `${u.piso} ${u.dto}` : `Piso ${u.piso} ${u.dto}`;
@@ -174,9 +173,9 @@ async function loadUnits() {
                 <td><strong>${u.unidad || ''}</strong></td>
                 <td>${pisoDtoStr}</td>
                 <td>${u.propietario || ''}</td>
-                <td><strong>${u.pin || '----'}</strong></td>
+                <td><code>${u.pin || '----'}</code></td>
                 <td>
-                   <button class="btn btn-ghost btn-sm" onclick="alert('PIN de ${u.unidad}: ${u.pin}')">Ver PIN</button>
+                   <button class="btn btn-ghost btn-sm" onclick="alert('Unidad: ${u.unidad}\\nPIN: ${u.pin}')">Ver PIN</button>
                 </td>
             `;
             tbody.appendChild(tr);
