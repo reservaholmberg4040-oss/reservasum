@@ -14,16 +14,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Botón Descargar PDF optimizado con datos dinámicos de reservas ---
+  // --- Botón Descargar PDF optimizado con formato de período seguro ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', async () => {
-      // Tomamos el período seleccionado (si existe un selector en pantalla, sino usamos el mes actual)
-      const periodSelect = document.getElementById('report-period-select');
-      const period = periodSelect ? periodSelect.value : new Date().toISOString().slice(0, 7);
+      // Intentamos extraer el valor del período de cualquier selector o input cercano
+      const periodInput = document.querySelector('input[type="month"], select, input[type="text"]');
+      let rawValue = periodInput ? periodInput.value : '';
+      
+      let period = '';
+      // Si el valor contiene un formato numérico válido YYYY-MM
+      if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
+        period = rawValue;
+      } else {
+        // Si el selector devuelve texto en español o formato extraño, por seguridad usamos el mes actual en curso
+        period = new Date().toISOString().slice(0, 7);
+      }
 
       try {
-        // 1. Consultar los datos del reporte mensual al backend
+        // 1. Consultar los datos del reporte mensual al backend con el formato correcto
         const res = await fetch(`/api/admin/dashboard?period=${period}`);
         if (!res.ok) throw new Error('No se pudo obtener la información del reporte.');
         const data = await res.json();
@@ -43,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <tr>
                 <td style="padding: 8px; border-bottom: 1px solid #ddd;">Unidad ${item.unidad || item.id}</td>
                 <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.propietario || 'Sin Propietario'}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.count || item.total || 0}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.count || item.total_turnos || 0}</td>
               </tr>`;
           });
         } else {
@@ -57,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reportCard.innerHTML = `
           <div style="font-family: Arial, sans-serif; color: #111; padding: 10px;">
             <h2 style="margin-bottom: 5px; color: #1f2937;">Informe Mensual de Reservas</h2>
-            <p style="color: #4b5563; font-size: 14px; margin-top: 0;">Período seleccionado: <b>${data.period}</b></p>
+            <p style="color: #4b5563; font-size: 14px; margin-top: 0;">Período consultado: <b>${data.period}</b></p>
             
             <div style="display: flex; gap: 30px; margin: 15px 0; font-size: 14px; background: #f9fafb; padding: 10px; border-radius: 6px;">
               <div><b>Total de Reservas del Mes:</b> ${data.totalReservasMes}</div>
