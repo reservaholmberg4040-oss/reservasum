@@ -1,121 +1,134 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin — SUM Holmberg 4040</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Reserva SUM</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-section {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        .action-toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .import-box {
+            background: #f8f9fa;
+            border: 1px dashed #ced4da;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 450px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background-color: #e9ecef; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: #0d6efd; color: white; }
+        .btn-success { background: #198754; color: white; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+    </style>
 </head>
 <body>
+    <div class="container" style="max-width: 1000px; margin: 30px auto; padding: 0 15px;">
+        <h1>Panel de Administración - Gestión de Unidades y Propietarios</h1>
 
-<div class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <div class="brand-icon">🛠️</div>
-      <div class="brand-text">
-        <h1>Panel de Administración</h1>
-        <p id="buildingName">Holmberg 4040</p>
-      </div>
+        <section class="admin-section">
+            <!-- Barra de Acciones Principales -->
+            <div class="action-toolbar">
+                <button id="btn-open-add-modal" class="btn btn-primary">+ Agregar Unidad</button>
+                <button id="btn-delete-selected" class="btn btn-warning">Eliminar Seleccionadas</button>
+                <button id="btn-delete-all" class="btn btn-danger">Eliminar TODAS las Unidades</button>
+            </div>
+
+            <!-- Sección de Importación por Excel -->
+            <div class="import-box">
+                <h3>Importar Unidades desde Excel</h3>
+                <p><small>El archivo Excel (.xlsx, .xls) debe contener las columnas: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong>, <strong>Propietario</strong>.</small></p>
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls">
+                    <label style="cursor: pointer;">
+                        <input type="checkbox" id="chk-replace-all"> Reemplazar todas las unidades actuales
+                    </label>
+                    <button id="btn-upload-excel" class="btn btn-success">Cargar Excel</button>
+                </div>
+            </div>
+
+            <!-- Tabla de Unidades -->
+            <table id="units-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" id="select-all-units">
+                        </th>
+                        <th>Unidad</th>
+                        <th>Piso</th>
+                        <th>Depto</th>
+                        <th>Propietario</th>
+                    </tr>
+                </thead>
+                <tbody id="units-table-body">
+                    <!-- Se cargará dinámicamente -->
+                </tbody>
+            </table>
+        </section>
     </div>
-    <div class="nav-links">
-      <a href="/">Ver calendario público</a>
-      <button id="logoutBtn" style="display:none">Cerrar sesión</button>
-    </div>
-  </div>
-</div>
 
-<div class="container">
-
-  <!-- LOGIN -->
-  <div class="login-wrap" id="loginWrap">
-    <div class="login-card">
-      <h2>Ingresar</h2>
-      <p class="sub" style="margin-top:-10px;color:var(--text-muted);font-size:13px;">Acceso exclusivo para la administración del consorcio.</p>
-      <div id="loginAlert"></div>
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Usuario</label>
-          <input type="text" id="loginUser" required>
+    <!-- Modal para Agregar Unidad Manualmente -->
+    <div id="add-unit-modal" class="modal">
+        <div class="modal-content">
+            <h2>Agregar Nueva Unidad</h2>
+            <form id="add-unit-form">
+                <div class="form-group">
+                    <label for="input-unidad">Unidad / N°</label>
+                    <input type="text" id="input-unidad" required placeholder="Ej: 101">
+                </div>
+                <div class="form-group">
+                    <label for="input-piso">Piso</label>
+                    <input type="text" id="input-piso" required placeholder="Ej: 1">
+                </div>
+                <div class="form-group">
+                    <label for="input-depto">Depto</label>
+                    <input type="text" id="input-depto" required placeholder="Ej: A">
+                </div>
+                <div class="form-group">
+                    <label for="input-propietario">Propietario</label>
+                    <input type="text" id="input-propietario" required placeholder="Ej: Juan Pérez">
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                    <button type="button" id="btn-close-modal" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Guardar Unidad</button>
+                </div>
+            </form>
         </div>
-        <div class="form-group">
-          <label>Contraseña</label>
-          <input type="password" id="loginPass" required>
-        </div>
-        <button class="btn btn-primary btn-block" type="submit">Ingresar</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- DASHBOARD -->
-  <div id="dashboardWrap" style="display:none">
-
-    <div class="page-title">
-      <div>
-        <h2>Dashboard de reservas</h2>
-        <p>Resumen mensual por unidad — usalo para facturar el uso del SUM en las expensas.</p>
-      </div>
-      <div class="toolbar">
-        <select id="periodSelect"></select>
-        <button class="btn btn-outline" id="downloadBtn">⬇ Descargar Excel</button>
-        <button class="btn btn-primary" id="sendMailBtn">✉ Enviar informe por mail</button>
-      </div>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Reservas en el período</div>
-        <div class="value" id="statTotalReservas">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Unidades que usaron el SUM</div>
-        <div class="value" id="statUnidadesActivas">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Total de unidades del edificio</div>
-        <div class="value" id="statTotalUnidades">0</div>
-      </div>
-    </div>
-
-    <div class="table-card">
-      <h3>Resumen por unidad (para cobrar expensas)</h3>
-      <table>
-        <thead><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>Turnos Día</th><th>Turnos Noche</th><th>Total</th></tr></thead>
-        <tbody id="resumenBody"></tbody>
-      </table>
-    </div>
-
-    <div class="table-card">
-      <h3>Todas las reservas del período</h3>
-      <table>
-        <thead><tr><th>Fecha</th><th>Turno</th><th>Unidad</th><th>Reservado por</th><th>Acciones</th></tr></thead>
-        <tbody id="reservasBody"></tbody>
-      </table>
-    </div>
-
-    <div class="table-card">
-      <h3>Historial de envíos de mail</h3>
-      <table>
-        <thead><tr><th>Período</th><th>Enviado</th><th>Destinatario</th><th>Estado</th></tr></thead>
-        <tbody id="logBody"></tbody>
-      </table>
-    </div>
-
-    <div class="table-card">
-      <h3>Unidades: propietario y PIN</h3>
-      <p class="sub" style="margin-top:-6px">Cada unidad usa un PIN de 4 dígitos para reservar y para editar/cancelar sus reservas desde "Mis reservas" (funciona desde cualquier dispositivo). Si cambia el dueño de una unidad, actualizá el propietario acá — se refleja en el calendario, los informes y los mails.</p>
-      <table>
-        <thead><tr><th>Unidad</th><th>Piso/Dto</th><th>Propietario</th><th>PIN</th><th>Acciones</th></tr></thead>
-        <tbody id="pinsBody"></tbody>
-      </table>
-    </div>
-
-  </div>
-</div>
-
-<div class="toast-wrap" id="toastWrap"></div>
-
-<script src="/js/admin.js"></script>
+    <script src="js/admin.js"></script>
 </body>
 </html>
