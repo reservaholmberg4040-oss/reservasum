@@ -1,135 +1,186 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración - SUM Holmberg 4040</title>
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        .admin-section {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-        }
-        .action-toolbar {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-        .import-box {
-            background: #f8f9fa;
-            border: 1px dashed #ced4da;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            align-items: center; justify-content: center;
-            z-index: 1000;
-        }
-        .modal.active { display: flex; }
-        .modal-content {
-            background: #fff;
-            padding: 25px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 450px;
-        }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
-        th { background-color: #e9ecef; }
-        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn-primary { background: #0d6efd; color: white; }
-        .btn-success { background: #198754; color: white; }
-        .btn-warning { background: #ffc107; color: #212529; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-secondary { background: #6c757d; color: white; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — SUM Holmberg 4040</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .admin-actions-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 15px 0;
+    }
+    .import-excel-card {
+      background: #f8f9fa;
+      border: 1px dashed #ced4da;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 15px 0 25px 0;
+    }
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      align-items: center; justify-content: center;
+      z-index: 2000;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: #fff;
+      padding: 25px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 450px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: bold; margin-bottom: 4px; }
+    .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+  </style>
 </head>
-<body>
-    <div class="container" style="max-width: 1000px; margin: 30px auto; padding: 0 15px;">
-        <h1>Panel de Administración - Gestión de Unidades y Propietarios</h1>
-
-        <section class="admin-section">
-            <!-- Barra de Acciones Principales -->
-            <div class="action-toolbar">
-                <button id="btn-open-add-modal" class="btn btn-primary">+ Agregar Unidad</button>
-                <button id="btn-delete-selected" class="btn btn-warning">Eliminar Seleccionadas</button>
-                <button id="btn-delete-all" class="btn btn-danger">Eliminar TODAS las Unidades</button>
-            </div>
-
-            <!-- Sección de Importación por Excel -->
-            <div class="import-box">
-                <h3>Importar Unidades desde Excel</h3>
-                <p><small>El archivo Excel (.xlsx, .xls) debe contener las columnas: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong>, <strong>Propietario</strong>.</small></p>
-                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; margin-top: 10px;">
-                    <input type="file" id="excel-file-input" accept=".xlsx, .xls">
-                    <label style="cursor: pointer;">
-                        <input type="checkbox" id="chk-replace-all"> Reemplazar todas las unidades actuales
-                    </label>
-                    <button id="btn-upload-excel" class="btn btn-success">Cargar Excel</button>
-                </div>
-            </div>
-
-            <!-- Tabla de Unidades -->
-            <table id="units-table">
-                <thead>
-                    <tr>
-                        <th style="width: 40px; text-align: center;">
-                            <input type="checkbox" id="select-all-units">
-                        </th>
-                        <th>Unidad</th>
-                        <th>Piso/Dto</th>
-                        <th>Propietario</th>
-                        <th>PIN</th>
-                    </tr>
-                </thead>
-                <tbody id="units-table-body">
-                    <!-- Carga dinámica -->
-                </tbody>
-            </table>
-        </section>
-    </div>
-
-    <!-- Modal para Agregar Unidad Manualmente -->
-    <div id="add-unit-modal" class="modal">
-        <div class="modal-content">
-            <h2>Agregar Nueva Unidad</h2>
-            <form id="add-unit-form">
-                <div class="form-group">
-                    <label for="input-unidad">Unidad / N°</label>
-                    <input type="text" id="input-unidad" required placeholder="Ej: 0001">
-                </div>
-                <div class="form-group">
-                    <label for="input-piso">Piso</label>
-                    <input type="text" id="input-piso" required placeholder="Ej: Piso 1">
-                </div>
-                <div class="form-group">
-                    <label for="input-depto">Depto</label>
-                    <input type="text" id="input-depto" required placeholder="Ej: A">
-                </div>
-                <div class="form-group">
-                    <label for="input-propietario">Propietario</label>
-                    <input type="text" id="input-propietario" required placeholder="Ej: APellido, Nombre">
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                    <button type="button" id="btn-close-modal" class="btn btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Guardar Unidad</button>
-                </div>
-            </form>
+<body class="bg">
+  <div class="layout">
+    <header class="header">
+      <div class="header-brand">
+        <span class="header-logo" aria-hidden="true">🛠️</span>
+        <div>
+          <h1 class="header-title">Panel de Administración</h1>
+          <p class="header-subtitle">Holmberg 4040</p>
         </div>
-    </div>
+      </div>
+      <div class="header-actions">
+        <a href="/" class="btn btn-ghost">Ver calendario público</a>
+        <button id="logout-btn" class="btn btn-ghost" type="button">Cerrar sesión</button>
+      </div>
+    </header>
 
-    <script src="js/admin.js"></script>
+    <main class="main">
+      <!-- Sección de Informes Mensuales Original -->
+      <section class="card admin-card">
+        <div class="admin-card-header">
+          <h2>Informes mensuales</h2>
+          <p>Generá y enviá por mail el resumen de reservas del mes para la administración.</p>
+        </div>
+        <form id="report-form" class="report-form">
+          <div class="form-row">
+            <div class="field">
+              <label for="month-select">Período</label>
+              <input type="month" id="month-select" name="period" required>
+            </div>
+            <div class="field">
+              <label for="recipient-email">Email destinatario</label>
+              <input type="email" id="recipient-email" name="recipient" placeholder="ejemplo@administracion.com" required>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" id="btn-send-report" class="btn btn-primary">Enviar informe por mail</button>
+            <button type="button" id="btn-download-pdf" class="btn btn-secondary">Descargar PDF</button>
+          </div>
+        </form>
+        
+        <div class="report-history">
+          <h3>Historial de envíos</h3>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>PERÍODO</th>
+                  <th>ENVIADO</th>
+                  <th>DESTINATARIO</th>
+                  <th>ESTADO</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <tr><td colspan="4" class="text-muted">Cargando historial...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sección de Unidades con las Nuevas Funciones -->
+      <section class="card admin-card" style="margin-top: 2rem;">
+        <div class="admin-card-header">
+          <h2>Unidades: propietario y PIN</h2>
+          <p>Cada unidad usa un PIN de 4 dígitos para reservar. Gestioná las unidades individualmente o de forma masiva vía Excel.</p>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="admin-actions-bar">
+          <button id="btn-open-add-modal" class="btn btn-primary" type="button">+ Agregar Unidad</button>
+          <button id="btn-delete-selected" class="btn btn-warning" type="button">Eliminar Seleccionadas</button>
+          <button id="btn-delete-all" class="btn btn-danger" type="button">Eliminar TODAS las Unidades</button>
+        </div>
+
+        <!-- Módulo de Carga por Excel -->
+        <div class="import-excel-card">
+          <h3 style="margin-top: 0;">Importar Unidades desde Excel</h3>
+          <p><small>Columnas aceptadas en el Excel: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong> (o Piso/Dto), <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+            <input type="file" id="excel-file-input" accept=".xlsx, .xls">
+            <label style="cursor: pointer; font-size: 0.9rem;">
+              <input type="checkbox" id="chk-replace-all"> Reemplazar todas las unidades actuales
+            </label>
+            <button id="btn-upload-excel" class="btn btn-success" type="button">Cargar Excel</button>
+          </div>
+        </div>
+
+        <!-- Tabla Completa de Unidades -->
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">
+                  <input type="checkbox" id="select-all-units">
+                </th>
+                <th>UNIDAD</th>
+                <th>PISO/DTO</th>
+                <th>PROPIETARIO</th>
+                <th>PIN</th>
+                <th>ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody id="units-tbody">
+              <tr><td colspan="6" class="text-muted">Cargando unidades...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal para Agregar Unidad -->
+  <div id="add-unit-modal" class="modal-overlay">
+    <div class="modal-box">
+      <h3>Agregar Nueva Unidad</h3>
+      <form id="add-unit-form" style="margin-top: 15px;">
+        <div class="form-group">
+          <label for="input-unidad">Unidad / N°</label>
+          <input type="text" id="input-unidad" required placeholder="Ej: 0001">
+        </div>
+        <div class="form-group">
+          <label for="input-pisodto">Piso / Dto</label>
+          <input type="text" id="input-pisodto" required placeholder="Ej: Piso 1 A">
+        </div>
+        <div class="form-group">
+          <label for="input-propietario">Propietario</label>
+          <input type="text" id="input-propietario" required placeholder="Ej: LINARES, EDUARDO">
+        </div>
+        <div class="form-group">
+          <label for="input-pin">PIN (Opcional - 4 dígitos)</label>
+          <input type="text" id="input-pin" maxlength="4" placeholder="Ej: 1234 (vacío = auto)">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+          <button type="button" id="btn-close-modal" class="btn btn-ghost">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/admin.js"></script>
 </body>
 </html>
