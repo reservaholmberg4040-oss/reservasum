@@ -4,41 +4,41 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — SUM Holmberg 4040</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="css/style.css">
   <style>
-    .admin-actions-bar {
+    .actions-bar {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin: 15px 0;
+      margin-bottom: 20px;
     }
-    .import-excel-card {
+    .excel-card {
       background: #f8f9fa;
-      border: 1px dashed #ced4da;
-      padding: 15px;
+      border: 1px dashed #cbd5e1;
+      padding: 16px;
       border-radius: 8px;
-      margin: 15px 0 25px 0;
+      margin-bottom: 20px;
     }
-    .modal-overlay {
+    .modal {
       display: none;
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.5);
       align-items: center; justify-content: center;
-      z-index: 2000;
+      z-index: 1000;
     }
-    .modal-overlay.active { display: flex; }
-    .modal-box {
+    .modal.active { display: flex; }
+    .modal-content {
       background: #fff;
-      padding: 25px;
-      border-radius: 8px;
+      padding: 24px;
+      border-radius: 12px;
       width: 100%;
       max-width: 450px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-weight: bold; margin-bottom: 4px; }
-    .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
+    .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
+    .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
+    .btn-sm { padding: 4px 10px; font-size: 0.85rem; }
   </style>
 </head>
 <body class="bg">
@@ -58,7 +58,7 @@
     </header>
 
     <main class="main">
-      <!-- Sección de Informes Mensuales Original -->
+      <!-- Informes Mensuales -->
       <section class="card admin-card">
         <div class="admin-card-header">
           <h2>Informes mensuales</h2>
@@ -80,7 +80,6 @@
             <button type="button" id="btn-download-pdf" class="btn btn-secondary">Descargar PDF</button>
           </div>
         </form>
-        
         <div class="report-history">
           <h3>Historial de envíos</h3>
           <div class="table-wrap">
@@ -94,32 +93,30 @@
                 </tr>
               </thead>
               <tbody id="history-tbody">
-                <tr><td colspan="4" class="text-muted">Cargando historial...</td></tr>
+                <tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>
               </tbody>
             </table>
           </div>
         </div>
       </section>
 
-      <!-- Sección de Unidades con las Nuevas Funciones -->
-      <section class="card admin-card" style="margin-top: 2rem;">
+      <!-- Unidades: Propietario y PIN -->
+      <section class="card admin-card" style="margin-top: 24px;">
         <div class="admin-card-header">
           <h2>Unidades: propietario y PIN</h2>
-          <p>Cada unidad usa un PIN de 4 dígitos para reservar. Gestioná las unidades individualmente o de forma masiva vía Excel.</p>
+          <p>Cada unidad usa un PIN de 4 dígitos para reservar y para editar/cancelar sus reservas desde "Mis reservas".</p>
         </div>
 
-        <!-- Botones de Acción -->
-        <div class="admin-actions-bar">
+        <div class="actions-bar">
           <button id="btn-open-add-modal" class="btn btn-primary" type="button">+ Agregar Unidad</button>
           <button id="btn-delete-selected" class="btn btn-warning" type="button">Eliminar Seleccionadas</button>
           <button id="btn-delete-all" class="btn btn-danger" type="button">Eliminar TODAS las Unidades</button>
         </div>
 
-        <!-- Módulo de Carga por Excel -->
-        <div class="import-excel-card">
-          <h3 style="margin-top: 0;">Importar Unidades desde Excel</h3>
-          <p><small>Columnas aceptadas en el Excel: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong> (o Piso/Dto), <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+        <div class="excel-card">
+          <h3 style="margin-top: 0; font-size: 1rem;">Importar desde Excel</h3>
+          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso/Dto</strong> (o Piso), <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
             <input type="file" id="excel-file-input" accept=".xlsx, .xls">
             <label style="cursor: pointer; font-size: 0.9rem;">
               <input type="checkbox" id="chk-replace-all"> Reemplazar todas las unidades actuales
@@ -128,7 +125,6 @@
           </div>
         </div>
 
-        <!-- Tabla Completa de Unidades -->
         <div class="table-wrap">
           <table class="data-table">
             <thead>
@@ -152,9 +148,9 @@
     </main>
   </div>
 
-  <!-- Modal para Agregar Unidad -->
-  <div id="add-unit-modal" class="modal-overlay">
-    <div class="modal-box">
+  <!-- Modal Agregar Unidad -->
+  <div id="add-unit-modal" class="modal">
+    <div class="modal-content">
       <h3>Agregar Nueva Unidad</h3>
       <form id="add-unit-form" style="margin-top: 15px;">
         <div class="form-group">
@@ -163,15 +159,15 @@
         </div>
         <div class="form-group">
           <label for="input-pisodto">Piso / Dto</label>
-          <input type="text" id="input-pisodto" required placeholder="Ej: Piso 1 A">
+          <input type="text" id="input-pisodto" required placeholder="Ej: PB LOCAL o Piso 1 A">
         </div>
         <div class="form-group">
           <label for="input-propietario">Propietario</label>
           <input type="text" id="input-propietario" required placeholder="Ej: LINARES, EDUARDO">
         </div>
         <div class="form-group">
-          <label for="input-pin">PIN (Opcional - 4 dígitos)</label>
-          <input type="text" id="input-pin" maxlength="4" placeholder="Ej: 1234 (vacío = auto)">
+          <label for="input-pin">PIN (Opcional)</label>
+          <input type="text" id="input-pin" maxlength="4" placeholder="Ej: 5456 (vacío = automático)">
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
           <button type="button" id="btn-close-modal" class="btn btn-ghost">Cancelar</button>
@@ -181,6 +177,6 @@
     </div>
   </div>
 
-  <script src="/js/admin.js"></script>
+  <script src="js/admin.js"></script>
 </body>
 </html>
