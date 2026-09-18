@@ -57,6 +57,31 @@ router.get('/', (req, res) => {
     }
 });
 
+// POST /:id/verify-pin: Verificar el PIN de la unidad (Soluciona el error 404)
+router.post('/:id/verify-pin', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { pin } = req.body;
+
+        const units = readUnitsFromFile();
+        const unit = Array.isArray(units) ? units.find(u => 
+            u && (String(u.id) === String(id) || String(u.unidad) === String(id))
+        ) : null;
+
+        if (!unit) {
+            return res.status(404).json({ error: 'Unidad no encontrada.' });
+        }
+
+        if (unit.pin && String(unit.pin).trim() !== String(pin || '').trim()) {
+            return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
+        }
+
+        res.json({ ok: true, success: true, unit });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al verificar el PIN.' });
+    }
+});
+
 // POST /add: Agregar manualmente una o más unidades a las existentes
 router.post('/add', (req, res) => {
     try {
