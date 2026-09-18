@@ -10,12 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Modal para agregar unidad
+    // Modal Agregar Unidad
     const modal = document.getElementById('add-unit-modal');
     document.getElementById('btn-open-add-modal').addEventListener('click', () => modal.classList.add('active'));
     document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
 
-    // Formulario de agregar unidad
+    // Formulario Guardar
     document.getElementById('add-unit-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const unidad = document.getElementById('input-unidad').value.trim();
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Eliminar TODAS las unidades
+    // Eliminar TODAS
     document.getElementById('btn-delete-all').addEventListener('click', async () => {
         const confirmStr = prompt('¡ATENCIÓN! Se eliminarán TODAS las unidades.\nEscribí "ELIMINAR" para confirmar:');
         if (confirmStr === 'ELIMINAR') {
@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// Cargar tabla de unidades respetando los campos reales de la DB (unidad, piso, propietario, pin)
+// Cargar unidades mapeando adecuadamente { piso: "PB", dto: "LOCAL" } o { piso: "1", dto: "A" }
 async function loadUnits() {
     const tbody = document.getElementById('units-tbody');
     if (!tbody) return;
@@ -157,19 +157,26 @@ async function loadUnits() {
             const tr = document.createElement('tr');
             const unitId = u.id || u.unidad;
             
-            // Detectar adecuadamente el valor de Piso/Dto según como esté en la DB
-            const pisoDtoValue = u.piso || u['piso/dto'] || u.depto || '-';
+            // Construcción correcta de PISO/DTO
+            let pisoDtoStr = '-';
+            if (u.piso && u.dto) {
+                pisoDtoStr = u.piso.toString().startsWith('PB') ? `${u.piso} ${u.dto}` : `Piso ${u.piso} ${u.dto}`;
+            } else if (u.piso) {
+                pisoDtoStr = u.piso;
+            } else if (u['piso/dto']) {
+                pisoDtoStr = u['piso/dto'];
+            }
 
             tr.innerHTML = `
                 <td style="text-align: center;">
                     <input type="checkbox" class="unit-checkbox" value="${unitId}">
                 </td>
                 <td><strong>${u.unidad || ''}</strong></td>
-                <td>${pisoDtoValue}</td>
+                <td>${pisoDtoStr}</td>
                 <td>${u.propietario || ''}</td>
                 <td><strong>${u.pin || '----'}</strong></td>
                 <td>
-                   <button class="btn btn-ghost btn-sm" onclick="alert('Unidad: ${u.unidad}\\nPIN: ${u.pin}')">Ver PIN</button>
+                   <button class="btn btn-ghost btn-sm" onclick="alert('PIN de ${u.unidad}: ${u.pin}')">Ver PIN</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -179,7 +186,7 @@ async function loadUnits() {
     }
 }
 
-// Historial de informes
+// Historial
 async function loadReportHistory() {
     const tbody = document.getElementById('history-tbody');
     if (!tbody) return;
