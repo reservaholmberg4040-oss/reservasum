@@ -240,7 +240,7 @@ async function onSubmitReserva(e) {
   const turno = document.getElementById('reservaTurno').value;
   const editId = document.getElementById('reservaEditId').value;
   const unit_pin = document.getElementById('unitPinInput').value.trim();
-  const unit_id = document.getElementById('unitSelect').value; // Tomado como string directo
+  const unit_id = document.getElementById('unitSelect').value;
   const nombre = document.getElementById('nombreInput').value.trim();
   const apellido = document.getElementById('apellidoInput').value.trim();
   const alertBox = document.getElementById('formAlert');
@@ -281,18 +281,51 @@ async function onSubmitReserva(e) {
 }
 
 async function doCancel(id) {
-  if (!confirm('¿Seguro que querés cancelar esta reserva?')) return;
-  const res = await fetch(`/api/reservations/${id}`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unit_pin: currentPinUnit ? currentPinUnit.pin : '' })
+  const itemElement = document.querySelector(`[data-cancel="${id}"]`)?.closest('.mr-item');
+  if (!itemElement) return;
+
+  if (itemElement.querySelector('.confirm-box')) return;
+
+  const confirmBox = document.createElement('div');
+  confirmBox.className = 'confirm-box';
+  confirmBox.style.cssText = 'margin-top: 10px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;';
+  confirmBox.innerHTML = `
+    <span style="font-size: 0.9rem; color: #ef4444; font-weight: 500;">¿Seguro que querés cancelar esta reserva?</span>
+    <div style="display: flex; gap: 6px;">
+      <button class="btn btn-danger btn-sm confirm-yes" style="padding: 4px 10px;">Sí, cancelar</button>
+      <button class="btn btn-outline btn-sm confirm-no" style="padding: 4px 10px;">No</button>
+    </div>
+  `;
+
+  itemElement.appendChild(confirmBox);
+
+  confirmBox.querySelector('.confirm-yes').addEventListener('click', async () => {
+    confirmBox.innerHTML = `<span style="font-size: 0.9rem; color: #666;">Cancelando...</span>`;
+    try {
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_pin: currentPinUnit ? currentPinUnit.pin : '' })
+      });
+      const data = await res.json();
+      if (!res.ok) { 
+        toast(data.error || 'No se pudo cancelar', 'error'); 
+        confirmBox.remove();
+        return; 
+      }
+      toast('Reserva cancelada', 'success');
+      await loadYear(currentYear);
+      renderYearGrid();
+      await loadMisReservas();
+    } catch (err) {
+      toast('Error al procesar la cancelación', 'error');
+      confirmBox.remove();
+    }
   });
-  const data = await res.json();
-  if (!res.ok) { toast(data.error || 'No se pudo cancelar', 'error'); return; }
-  toast('Reserva cancelada', 'success');
-  await loadYear(currentYear);
-  renderYearGrid();
-  await loadMisReservas();
+
+  confirmBox.querySelector('.confirm-no').addEventListener('click', () => {
+    confirmBox.remove();
+  });
 }
 
 // ---------- Mis reservas (unidad + PIN) ----------
