@@ -45,7 +45,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// Crear reserva
+// Crear reserva (con validación estricta de PIN)
 router.post('/', (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -70,8 +70,12 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Unidad no encontrada.' });
     }
 
-    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
-      return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
+    // Validación estricta: el PIN es obligatorio y debe coincidir exactamente
+    const storedPin = String(targetUnit.pin || '').trim();
+    const providedPin = String(unit_pin || '').trim();
+
+    if (!providedPin || storedPin !== providedPin) {
+      return res.status(400).json({ error: 'El PIN de la unidad es incorrecto o está vacío.' });
     }
 
     let reservations = readData(dbFile, []);
