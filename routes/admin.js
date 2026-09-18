@@ -106,7 +106,7 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
-// --- NUEVOS ENDPOINTS: Importar Excel, Agregar y Eliminar ---
+// --- IMPORTAR EXCEL CON FORMATO COMPATIBLE CON RESERVAS ---
 router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
@@ -115,13 +115,17 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     const sheetName = workbook.SheetNames[0];
     const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    const importedUnits = rows.map((row, index) => ({
-      unidad: String(row['Unidad'] || row['unidad'] || `00${index + 1}`),
-      piso: String(row['Piso'] || row['piso'] || 'PB'),
-      dto: String(row['Depto'] || row['dto'] || row['DTO'] || 'A'),
-      propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
-      pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000))
-    }));
+    const importedUnits = rows.map((row, index) => {
+      const uVal = String(row['Unidad'] || row['unidad'] || `00${index + 1}`).padStart(4, '0');
+      return {
+        id: uVal,
+        unidad: uVal,
+        piso: String(row['Piso'] || row['piso'] || 'PB'),
+        dto: String(row['Depto'] || row['dto'] || row['DTO'] || 'A'),
+        propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
+        pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000))
+      };
+    });
 
     const replaceAll = req.query.replace === 'true';
     let currentUnits = replaceAll ? [] : db.units.all();
@@ -139,9 +143,11 @@ router.post('/units/add', requireAdmin, (req, res) => {
   try {
     const { unidad, piso, dto, propietario, pin } = req.body;
     const currentUnits = db.units.all();
+    const uVal = String(unidad || `00${currentUnits.length + 1}`).padStart(4, '0');
 
     const newUnit = {
-      unidad: unidad || `00${currentUnits.length + 1}`,
+      id: uVal,
+      unidad: uVal,
       piso: piso || 'PB',
       dto: dto || 'A',
       propietario: propietario || '',
@@ -165,7 +171,7 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
     }
 
     const currentUnits = db.units.all();
-    const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)));
+    const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id)));
     db.units.saveAll(filteredUnits);
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
