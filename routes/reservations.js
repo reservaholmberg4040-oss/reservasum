@@ -2,118 +2,69 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-const TURNOS = ['dia', 'noche'];
-
-function serialize(row) {
-  return row;
-}
-
-// "Hoy" según la hora de Argentina, sin importar en qué zona horaria corra el servidor (Render usa UTC).
-function todayISOAr() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); // formato YYYY-MM-DD
-}
-
-// Público: todas las reservas visibles para todo el que entra a la web (calendario transparente)
-router.get('/', (req, res) => {
-  const { from, to, year, unit_id } = req.query;
-  let rows;
-  if (unit_id) rows = db.reservations.byUnit(unit_id);
-  else if (year) rows = db.reservations.byYear(year);
-  else if (from && to) rows = db.reservations.byRange(from, to);
-  else rows = db.reservations.all();
-  res.json(rows.map(serialize));
-});
-
-// Crear reserva
 router.post('/', (req, res) => {
-  const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
+  // 1. Extraer los datos enviados por el formulario
+  const { unitId, unidad, unit, pin, name, lastName, date, shift } = req.body;
 
-  if (!date || !turno || !unit_id || !nombre || !apellido) {
-    return res.status(400).json({ error: 'Faltan datos: fecha, turno, unidad, nombre y apellido son obligatorios.' });
-  }
-  if (!TURNOS.includes(turno)) {
-    return res.status(400).json({ error: 'Turno inválido.' });
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return res.status(400).json({ error: 'Fecha inválida.' });
+  // Normalizar el identificador de la unidad ingresado
+  const rawUnitId = String(unitId || unidad || unit || '').trim();
+
+  if (!rawUnitId) {
+    return res.status(400).json({ error: 'Elegí una unidad.' });
   }
 
-  const unit = db.units.byId(unit_id);
-  if (!unit) return res.status(400).json({ error: 'Unidad inválida.' });
+  // 2. Obtener todas las unidades registradas en db.js
+  const units = typeof db.units.all === 'function' ? db.units.all() : [];
 
-  const isAdmin = !!(req.session && req.session.isAdmin);
+  // 3. Buscar la unidad tolerando ceros a la izquierda (ej: "0013" vs "13")
+  const targetUnit = units.find(u => {
+    const dbId = String(u.id || '').trim();
+    const dbUnidad = String(u.unidad || '').trim();
+    const cleanRaw = rawUnitId.replace(/^0+/, '');
+    const cleanDbId = dbId.replace(/^0+/, '');
+    const cleanDbUnidad = dbUnidad.replace(/^0+/, '');
 
-  if (!isAdmin && !db.units.verifyPin(unit_id, unit_pin)) {
-    return res.status(403).json({ error: 'PIN incorrecto. Verificá el PIN de tu unidad.' });
-  }
-
-  if (!isAdmin && date < todayISOAr()) {
-    return res.status(400).json({ error: 'No se puede reservar en una fecha que ya pasó.' });
-  }
-
-  const existing = db.reservations.findConflict(date, turno);
-  if (existing) {
-    return res.status(409).json({
-      error: `Ese turno ya está reservado (Unidad ${existing.unit_id === unit.id ? 'propia' : 'Piso ' + unit.piso}). Elegí otro turno o día.`,
-      taken: true
-    });
-  }
-
-  const row = db.reservations.create({ date, turno, unit_id: Number(unit_id), nombre: nombre.trim(), apellido: apellido.trim() });
-  res.status(201).json(serialize(row));
-});
-
-// Editar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
-router.put('/:id', (req, res) => {
-  const { id } = req.params;
-  const { unit_pin, date, turno, nombre, apellido } = req.body;
-
-  const current = db.reservations.byId(id);
-  if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-  const isAdmin = !!(req.session && req.session.isAdmin);
-  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
-    return res.status(403).json({ error: 'PIN incorrecto. No se pudo editar la reserva.' });
-  }
-
-  const newDate = date || current.date;
-  const newTurno = turno || current.turno;
-
-  if (!isAdmin && newDate < todayISOAr()) {
-    return res.status(400).json({ error: 'No se puede mover una reserva a una fecha que ya pasó.' });
-  }
-
-  if (newDate !== current.date || newTurno !== current.turno) {
-    const conflict = db.reservations.findConflict(newDate, newTurno, id);
-    if (conflict) {
-      return res.status(409).json({ error: 'Ese turno ya está ocupado. Elegí otro.', taken: true });
-    }
-  }
-
-  const row = db.reservations.update(id, {
-    date: newDate,
-    turno: newTurno,
-    nombre: nombre || current.nombre,
-    apellido: apellido || current.apellido
+    return (
+      dbId === rawUnitId ||
+      dbUnidad === rawUnitId ||
+      (cleanRaw !== '' && (cleanRaw === cleanDbId || cleanRaw === cleanDbUnidad))
+    );
   });
-  res.json(serialize(row));
-});
 
-// Cancelar reserva: requiere el PIN de la unidad dueña de la reserva, o ser admin
-router.delete('/:id', (req, res) => {
-  const { id } = req.params;
-  const unit_pin = (req.body && req.body.unit_pin) || req.query.unit_pin;
-
-  const current = db.reservations.byId(id);
-  if (!current) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-  const isAdmin = !!(req.session && req.session.isAdmin);
-  if (!isAdmin && !db.units.verifyPin(current.unit_id, unit_pin)) {
-    return res.status(403).json({ error: 'PIN incorrecto. No se pudo cancelar la reserva.' });
+  if (!targetUnit) {
+    return res.status(400).json({ error: 'Elegí una unidad.' });
   }
 
-  db.reservations.remove(id);
-  res.json({ ok: true });
+  // 4. Validar PIN
+  if (String(targetUnit.pin || '').trim() !== String(pin || '').trim()) {
+    return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
+  }
+
+  // 5. Registrar la reserva
+  try {
+    const reservationData = {
+      unitId: targetUnit.unidad || targetUnit.id,
+      piso: targetUnit.piso || '',
+      dto: targetUnit.dto || '',
+      propietario: targetUnit.propietario || '',
+      name: name || '',
+      lastName: lastName || '',
+      date,
+      shift,
+      createdAt: new Date().toISOString()
+    };
+
+    let newReservation;
+    if (typeof db.reservations.add === 'function') {
+      newReservation = db.reservations.add(reservationData);
+    } else if (typeof db.reservations.create === 'function') {
+      newReservation = db.reservations.create(reservationData);
+    }
+
+    res.json({ ok: true, success: true, reservation: newReservation });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al registrar la reserva.' });
+  }
 });
 
 module.exports = router;
