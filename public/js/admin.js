@@ -14,11 +14,83 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Botón Descargar PDF optimizado (impresión limpia)
+  // --- Botón Descargar PDF optimizado con datos dinámicos de reservas ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
-    btnDownloadPdf.addEventListener('click', () => {
-      window.print();
+    btnDownloadPdf.addEventListener('click', async () => {
+      // Tomamos el período seleccionado (si existe un selector en pantalla, sino usamos el mes actual)
+      const periodSelect = document.getElementById('report-period-select');
+      const period = periodSelect ? periodSelect.value : new Date().toISOString().slice(0, 7);
+
+      try {
+        // 1. Consultar los datos del reporte mensual al backend
+        const res = await fetch(`/api/admin/dashboard?period=${period}`);
+        if (!res.ok) throw new Error('No se pudo obtener la información del reporte.');
+        const data = await res.json();
+
+        // 2. Buscar el contenedor principal o tarjeta donde se reflejará el informe
+        let reportCard = document.querySelector('.admin-card');
+        if (!reportCard) {
+          alert('No se encontró el contenedor del reporte en la vista.');
+          return;
+        }
+
+        // 3. Construir las filas de la tabla con las reservas agrupadas por unidad
+        let rowsHtml = '';
+        if (data.totalsByUnit && data.totalsByUnit.length > 0) {
+          data.totalsByUnit.forEach(item => {
+            rowsHtml += `
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd;">Unidad ${item.unidad || item.id}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.propietario || 'Sin Propietario'}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.count || item.total || 0}</td>
+              </tr>`;
+          });
+        } else {
+          rowsHtml = `<tr><td colspan="3" style="text-align: center; padding: 15px; color: #6b7280;">No hay reservas registradas para este período.</td></tr>`;
+        }
+
+        // Guardamos temporalmente el contenido original por si el usuario cancela la impresión
+        const originalContent = reportCard.innerHTML;
+
+        // 4. Inyectar la estructura formal del informe lista para imprimir
+        reportCard.innerHTML = `
+          <div style="font-family: Arial, sans-serif; color: #111; padding: 10px;">
+            <h2 style="margin-bottom: 5px; color: #1f2937;">Informe Mensual de Reservas</h2>
+            <p style="color: #4b5563; font-size: 14px; margin-top: 0;">Período seleccionado: <b>${data.period}</b></p>
+            
+            <div style="display: flex; gap: 30px; margin: 15px 0; font-size: 14px; background: #f9fafb; padding: 10px; border-radius: 6px;">
+              <div><b>Total de Reservas del Mes:</b> ${data.totalReservasMes}</div>
+              <div><b>Unidades Activas:</b> ${data.unidadesActivas}</div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
+              <thead>
+                <tr style="background: #f4f5fb; text-align: left;">
+                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db;">Unidad</th>
+                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db;">Propietario</th>
+                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db; text-align: center;">Cant. Reservas</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        // 5. Lanzar la impresión nativa del navegador
+        window.print();
+
+        // 6. Restaurar la vista original de la tarjeta al cerrar o terminar la impresión
+        setTimeout(() => {
+          reportCard.innerHTML = originalContent;
+        }, 1000);
+
+      } catch (err) {
+        console.error('Error al generar el PDF:', err);
+        alert('Ocurrió un error al preparar el reporte para imprimir.');
+      }
     });
   }
 
