@@ -4,13 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — SUM Holmberg 4040</title>
+  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="css/style.css">
   <style>
     .actions-bar {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 20px;
+      margin: 15px 0;
     }
     .excel-card {
       background: #f8f9fa;
@@ -38,52 +39,51 @@
     .form-group { margin-bottom: 12px; }
     .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
     .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-    .btn-sm { padding: 4px 10px; font-size: 0.85rem; }
   </style>
 </head>
 <body class="bg">
-  <div class="layout">
-    <header class="header">
-      <div class="header-brand">
-        <span class="header-logo" aria-hidden="true">🛠️</span>
-        <div>
-          <h1 class="header-title">Panel de Administración</h1>
-          <p class="header-subtitle">Holmberg 4040</p>
-        </div>
+  <header class="header">
+    <div class="header-brand">
+      <span class="header-logo" aria-hidden="true">🛠️</span>
+      <div>
+        <h1 class="header-title">Panel de Administración</h1>
+        <p class="header-subtitle">Holmberg 4040</p>
       </div>
-      <div class="header-actions">
-        <a href="/" class="btn btn-ghost">Ver calendario público</a>
-        <button id="logout-btn" class="btn btn-ghost" type="button">Cerrar sesión</button>
-      </div>
-    </header>
+    </div>
+    <div class="header-actions">
+      <a href="/" class="btn btn-ghost">Ver calendario público</a>
+      <button id="logout-btn" class="btn btn-ghost" type="button">Cerrar sesión</button>
+    </div>
+  </header>
 
+  <div class="container" style="max-width: 1100px; margin: 30px auto; padding: 0 15px;">
     <main class="main">
       <!-- Informes Mensuales -->
-      <section class="card admin-card">
+      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 24px;">
         <div class="admin-card-header">
           <h2>Informes mensuales</h2>
           <p>Generá y enviá por mail el resumen de reservas del mes para la administración.</p>
         </div>
         <form id="report-form" class="report-form">
-          <div class="form-row">
-            <div class="field">
+          <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+            <div class="field" style="flex: 1;">
               <label for="month-select">Período</label>
               <input type="month" id="month-select" name="period" required>
             </div>
-            <div class="field">
+            <div class="field" style="flex: 2;">
               <label for="recipient-email">Email destinatario</label>
               <input type="email" id="recipient-email" name="recipient" placeholder="ejemplo@administracion.com" required>
             </div>
           </div>
-          <div class="form-actions">
+          <div class="form-actions" style="display: flex; gap: 10px;">
             <button type="submit" id="btn-send-report" class="btn btn-primary">Enviar informe por mail</button>
             <button type="button" id="btn-download-pdf" class="btn btn-secondary">Descargar PDF</button>
           </div>
         </form>
-        <div class="report-history">
+        <div class="report-history" style="margin-top: 20px;">
           <h3>Historial de envíos</h3>
           <div class="table-wrap">
-            <table class="data-table">
+            <table class="data-table" style="width: 100%; border-collapse: collapse;">
               <thead>
                 <tr>
                   <th>PERÍODO</th>
@@ -101,7 +101,7 @@
       </section>
 
       <!-- Unidades: Propietario y PIN -->
-      <section class="card admin-card" style="margin-top: 24px;">
+      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
         <div class="admin-card-header">
           <h2>Unidades: propietario y PIN</h2>
           <p>Cada unidad usa un PIN de 4 dígitos para reservar y para editar/cancelar sus reservas desde "Mis reservas".</p>
@@ -115,7 +115,7 @@
 
         <div class="excel-card">
           <h3 style="margin-top: 0; font-size: 1rem;">Importar desde Excel</h3>
-          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso/Dto</strong> (o Piso), <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
+          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso/Dto</strong>, <strong>Propietario</strong>, <strong>PIN</strong>.</small></p>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
             <input type="file" id="excel-file-input" accept=".xlsx, .xls">
             <label style="cursor: pointer; font-size: 0.9rem;">
@@ -126,7 +126,7 @@
         </div>
 
         <div class="table-wrap">
-          <table class="data-table">
+          <table class="data-table" style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr>
                 <th style="width: 40px; text-align: center;">
