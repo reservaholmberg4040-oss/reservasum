@@ -3,20 +3,16 @@ const router = express.Router();
 const db = require('../db');
 
 router.post('/', (req, res) => {
-  // 1. Extraer los datos enviados por el formulario
   const { unitId, unidad, unit, pin, name, lastName, date, shift } = req.body;
-
-  // Normalizar el identificador de la unidad ingresado
   const rawUnitId = String(unitId || unidad || unit || '').trim();
 
   if (!rawUnitId) {
     return res.status(400).json({ error: 'Elegí una unidad.' });
   }
 
-  // 2. Obtener todas las unidades registradas en db.js
   const units = typeof db.units.all === 'function' ? db.units.all() : [];
 
-  // 3. Buscar la unidad tolerando ceros a la izquierda (ej: "0013" vs "13")
+  // Búsqueda tolerante a variaciones y ceros a la izquierda
   const targetUnit = units.find(u => {
     const dbId = String(u.id || '').trim();
     const dbUnidad = String(u.unidad || '').trim();
@@ -35,12 +31,10 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'Elegí una unidad.' });
   }
 
-  // 4. Validar PIN
   if (String(targetUnit.pin || '').trim() !== String(pin || '').trim()) {
     return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
   }
 
-  // 5. Registrar la reserva
   try {
     const reservationData = {
       unitId: targetUnit.unidad || targetUnit.id,
