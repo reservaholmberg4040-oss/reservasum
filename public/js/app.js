@@ -57,7 +57,7 @@ async function loadYear(year) {
 function populateUnitSelect(selectId) {
   const sel = document.getElementById(selectId);
   sel.innerHTML = '<option value="">Seleccioná la unidad...</option>' +
-    units.map(u => `<option value="${u.id}">${unitLabel(u)}</option>`).join('');
+    units.map(u => `<option value="${u.unidad || u.id}">${unitLabel(u)}</option>`).join('');
 }
 
 // ---------- Tabs ----------
@@ -169,7 +169,7 @@ function openDayModal(iso) {
   cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
 
   cont.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => handleTurnoAction(btn.dataset.action, iso, btn.dataset.turno, btn.dataset.id, Number(btn.dataset.unit)));
+    btn.addEventListener('click', () => handleTurnoAction(btn.dataset.action, iso, btn.dataset.turno, btn.dataset.id, btn.dataset.unit));
   });
 
   toggleOverlay('dayOverlay', true);
@@ -240,7 +240,7 @@ async function onSubmitReserva(e) {
   const turno = document.getElementById('reservaTurno').value;
   const editId = document.getElementById('reservaEditId').value;
   const unit_pin = document.getElementById('unitPinInput').value.trim();
-  const unit_id = Number(document.getElementById('unitSelect').value);
+  const unit_id = document.getElementById('unitSelect').value; // Tomado como string directo
   const nombre = document.getElementById('nombreInput').value.trim();
   const apellido = document.getElementById('apellidoInput').value.trim();
   const alertBox = document.getElementById('formAlert');
@@ -315,8 +315,8 @@ function setupPinForm() {
       return;
     }
 
-    const unit = units.find(u => u.id === Number(unitId));
-    currentPinUnit = { id: Number(unitId), pin };
+    const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
+    currentPinUnit = { id: unitId, pin };
     document.getElementById('pinAccessCard').style.display = 'none';
     document.getElementById('pinUnlockedWrap').style.display = '';
     document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
