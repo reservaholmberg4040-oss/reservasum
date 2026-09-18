@@ -14,6 +14,26 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
+// --- Helper para guardar en db.js de forma segura ---
+function saveUnitsToDb(unitsList) {
+  if (typeof db.units.saveAll === 'function') {
+    return db.units.saveAll(unitsList);
+  }
+  if (typeof db.units.save === 'function') {
+    return db.units.save(unitsList);
+  }
+  if (typeof db.save === 'function') {
+    return db.save();
+  }
+}
+
+function getAllUnitsFromDb() {
+  if (typeof db.units.all === 'function') {
+    return db.units.all() || [];
+  }
+  return [];
+}
+
 // --- Autenticación ---
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -77,7 +97,7 @@ router.get('/report-log', requireAdmin, (req, res) => {
 
 // --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  res.json(db.units.all());
+  res.json(getAllUnitsFromDb());
 });
 
 router.put('/units/:id/pin', requireAdmin, (req, res) => {
@@ -106,7 +126,40 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
-// --- IMPORTAR EXCEL CON FORMATO COMPATIBLE CON RESERVAS ---
+// --- AGREGAR, IMPORTAR Y ELIMINAR ---
+router.post('/units/add', requireAdmin, (req, res) => {
+  try {
+    const { unidad, piso, dto, propietario, pin } = req.body;
+    if (!unidad) {
+      return res.status(400).json({ error: 'El campo unidad es obligatorio.' });
+    }
+
+    const uVal = String(unidad).padStart(4, '0');
+    const currentUnits = getAllUnitsFromDb();
+
+    const exists = currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal);
+    if (exists) {
+      return res.status(400).json({ error: `La unidad ${uVal} ya existe.` });
+    }
+
+    const newUnit = {
+      id: uVal,
+      unidad: uVal,
+      piso: String(piso || ''),
+      dto: String(dto || ''),
+      propietario: String(propietario || ''),
+      pin: pin && /^\d{4}$/.test(String(pin)) ? String(pin) : Math.floor(1000 + Math.random() * 9000).toString()
+    };
+
+    currentUnits.push(newUnit);
+    saveUnitsToDb(currentUnits);
+
+    res.json({ success: true, unit: newUnit });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al agregar la unidad.' });
+  }
+});
+
 router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
@@ -128,10 +181,10 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     });
 
     const replaceAll = req.query.replace === 'true';
-    let currentUnits = replaceAll ? [] : db.units.all();
+    let currentUnits = replaceAll ? [] : getAllUnitsFromDb();
 
     const mergedUnits = [...currentUnits, ...importedUnits];
-    db.units.saveAll(mergedUnits);
+    saveUnitsToDb(mergedUnits);
 
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
   } catch (err) {
@@ -139,40 +192,18 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
   }
 });
 
-router.post('/units/add', requireAdmin, (req, res) => {
-  try {
-    const { unidad, piso, dto, propietario, pin } = req.body;
-    const currentUnits = db.units.all();
-    const uVal = String(unidad || `00${currentUnits.length + 1}`).padStart(4, '0');
-
-    const newUnit = {
-      id: uVal,
-      unidad: uVal,
-      piso: piso || 'PB',
-      dto: dto || 'A',
-      propietario: propietario || '',
-      pin: pin && /^\d{4}$/.test(pin) ? pin : Math.floor(1000 + Math.random() * 9000).toString()
-    };
-
-    currentUnits.push(newUnit);
-    db.units.saveAll(currentUnits);
-    res.json({ success: true, unit: newUnit });
-  } catch (err) {
-    res.status(500).json({ error: 'Error al agregar la unidad.' });
-  }
-});
-
 router.delete('/units/delete', requireAdmin, (req, res) => {
   try {
     const { ids, deleteAll } = req.body;
     if (deleteAll) {
-      db.units.saveAll([]);
+      saveUnitsToDb([]);
       return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
     }
 
-    const currentUnits = db.units.all();
+    const currentUnits = getAllUnitsFromDb();
     const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id)));
-    db.units.saveAll(filteredUnits);
+    saveUnitsToDb(filteredUnits);
+
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
     res.status(500).json({ error: 'Error al eliminar unidades.' });
