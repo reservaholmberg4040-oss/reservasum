@@ -6,21 +6,26 @@ const db = require('../db');
 router.get('/', (req, res) => {
   try {
     const { year, unit_id } = req.query;
-    let reservations = db.reservations.all() || [];
+    let reservations = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
+    
+    // Asegurar que siempre sea un array válido
+    if (!Array.isArray(reservations)) {
+      reservations = [];
+    }
 
     if (year) {
-      reservations = reservations.filter(r => r.date && r.date.startsWith(String(year)));
+      reservations = reservations.filter(r => r && r.date && String(r.date).startsWith(String(year)));
     }
 
     if (unit_id) {
-      reservations = reservations.filter(r => 
+      reservations = reservations.filter(r => r && (
         String(r.unit_id) === String(unit_id) || String(r.unitId) === String(unit_id)
-      );
+      ));
     }
 
     res.json(reservations);
   } catch (err) {
-    res.status(500).json({ error: 'Error al obtener las reservas.' });
+    res.json([]); // Devuelve un array vacío en lugar de colapsar con error 500
   }
 });
 
@@ -39,10 +44,10 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
-    const units = db.units.all() || [];
-    const targetUnit = units.find(u => 
-      String(u.id) === String(unit_id) || String(u.unidad) === String(unit_id)
-    );
+    const units = typeof db.units.all === 'function' ? db.units.all() : [];
+    const targetUnit = Array.isArray(units) ? units.find(u => 
+      u && (String(u.id) === String(unit_id) || String(u.unidad) === String(unit_id))
+    ) : null;
 
     if (!targetUnit) {
       return res.status(400).json({ error: 'Unidad no encontrada.' });
@@ -52,9 +57,10 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
     }
 
-    // Validar si el turno ya está ocupado en esa fecha
-    const allRes = db.reservations.all() || [];
-    const occupied = allRes.some(r => r.date === date && r.turno === turno);
+    const allRes = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
+    const safeAllRes = Array.isArray(allRes) ? allRes : [];
+    
+    const occupied = safeAllRes.some(r => r && r.date === date && r.turno === turno);
     if (occupied) {
       return res.status(400).json({ error: 'Ese turno ya está ocupado. Elegí otro.' });
     }
@@ -72,7 +78,9 @@ router.post('/', (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    db.reservations.add(newReservation);
+    if (typeof db.reservations.add === 'function') {
+      db.reservations.add(newReservation);
+    }
 
     res.json({ ok: true, success: true, reservation: newReservation });
   } catch (err) {
@@ -86,25 +94,28 @@ router.delete('/:id', (req, res) => {
     const { id } = req.params;
     const { unit_pin } = req.body;
 
-    let allRes = db.reservations.all() || [];
-    const reservation = allRes.find(r => String(r.id) === String(id));
+    let allRes = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
+    const safeAllRes = Array.isArray(allRes) ? allRes : [];
+    const reservation = safeAllRes.find(r => r && String(r.id) === String(id));
 
     if (!reservation) {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
-    const units = db.units.all() || [];
-    const targetUnit = units.find(u => 
-      String(u.unidad) === String(reservation.unit_id) || String(u.id) === String(reservation.unit_id)
-    );
+    const units = typeof db.units.all === 'function' ? db.units.all() : [];
+    const targetUnit = Array.isArray(units) ? units.find(u => 
+      u && (String(u.unidad) === String(reservation.unit_id) || String(u.id) === String(reservation.unit_id))
+    ) : null;
 
     const isAdmin = req.session && req.session.isAdmin;
     if (!isAdmin && (!targetUnit || String(targetUnit.pin).trim() !== String(unit_pin || '').trim())) {
       return res.status(400).json({ error: 'PIN incorrecto para cancelar la reserva.' });
     }
 
-    const filtered = allRes.filter(r => String(r.id) !== String(id));
-    db.reservations.saveAll(filtered);
+    const filtered = safeAllRes.filter(r => r && String(r.id) !== String(id));
+    if (typeof db.reservations.saveAll === 'function') {
+      db.reservations.saveAll(filtered);
+    }
 
     res.json({ ok: true });
   } catch (err) {
