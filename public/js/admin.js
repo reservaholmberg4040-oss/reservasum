@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Cargar tabla con funciones de Edición de PIN y Propietario integradas
+// Cargar tabla con campos editables Inline
 async function loadUnits() {
   const tbody = document.getElementById('units-tbody');
   if (!tbody) return;
@@ -164,13 +164,14 @@ async function loadUnits() {
         </td>
         <td><strong>${u.unidad || ''}</strong></td>
         <td>${pisoDtoStr}</td>
-        <td>${u.propietario || ''}</td>
-        <td><code>${u.pin || '----'}</code></td>
         <td>
-          <div class="action-btn-group">
-            <button class="btn-xs" onclick="changePin('${unitId}', '${u.pin || ''}')">Cambiar PIN</button>
-            <button class="btn-xs" onclick="editPropietario('${unitId}', '${u.propietario || ''}')">Editar Prop.</button>
-          </div>
+          <input type="text" class="inline-edit" value="${u.propietario || ''}" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:100%; box-sizing:border-box;" onchange="updatePropietario('${unitId}', this.value)">
+        </td>
+        <td>
+          <input type="text" maxlength="4" class="inline-edit" value="${u.pin || ''}" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:70px; text-align:center; font-family:monospace;" onchange="updatePin('${unitId}', this.value)">
+        </td>
+        <td>
+          <button class="btn-xs" style="padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;" onclick="regeneratePin('${unitId}')">Regenerar PIN</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -180,13 +181,11 @@ async function loadUnits() {
   }
 }
 
-// Funciones globales para cambiar PIN y Editar Propietario
-window.changePin = async (unitId, currentPin) => {
-  const newPin = prompt(`Ingrese el nuevo PIN de 4 dígitos para la unidad ${unitId}:`, currentPin);
-  if (!newPin) return;
-
+// Edición en tiempo real directamente en la tabla
+window.updatePin = async (unitId, newPin) => {
   if (!/^\d{4}$/.test(newPin)) {
-    return alert('El PIN debe tener exactamente 4 números.');
+    alert('El PIN debe tener exactamente 4 dígitos numéricos.');
+    return loadUnits();
   }
 
   try {
@@ -196,21 +195,22 @@ window.changePin = async (unitId, currentPin) => {
       body: JSON.stringify({ pin: newPin })
     });
 
-    if (res.ok) {
-      alert('PIN actualizado correctamente.');
-      loadUnits();
-    } else {
+    if (!res.ok) {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo actualizar el PIN.'));
+      alert('Error: ' + (err.error || 'No se pudo guardar el PIN.'));
+      loadUnits();
     }
   } catch (err) {
     alert('Error al conectar con el servidor.');
+    loadUnits();
   }
 };
 
-window.editPropietario = async (unitId, currentOwner) => {
-  const newOwner = prompt(`Editar nombre del propietario para la unidad ${unitId}:`, currentOwner);
-  if (newOwner === null) return;
+window.updatePropietario = async (unitId, newOwner) => {
+  if (!newOwner.trim()) {
+    alert('El propietario no puede quedar vacío.');
+    return loadUnits();
+  }
 
   try {
     const res = await fetch(`/api/admin/units/${unitId}/propietario`, {
@@ -219,12 +219,28 @@ window.editPropietario = async (unitId, currentOwner) => {
       body: JSON.stringify({ propietario: newOwner })
     });
 
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo guardar el propietario.'));
+      loadUnits();
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+    loadUnits();
+  }
+};
+
+window.regeneratePin = async (unitId) => {
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/regenerate-pin`, {
+      method: 'POST'
+    });
+
     if (res.ok) {
-      alert('Propietario actualizado.');
       loadUnits();
     } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo actualizar.'));
+      alert('Error: ' + (err.error || 'No se pudo regenerar.'));
     }
   } catch (err) {
     alert('Error al conectar con el servidor.');
