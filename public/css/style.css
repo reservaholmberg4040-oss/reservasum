@@ -228,3 +228,23 @@ tr:hover td { background: #fafaff; }
   .nav-links { width: 100%; justify-content: flex-start; }
   .year-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Impresión / Descarga de PDF ---------- */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .admin-card:first-of-type, .admin-card:first-of-type * {
+    visibility: visible;
+  }
+  .admin-card:first-of-type {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+  }
+  .report-form button, .header {
+    display: none !important;
+  }
+}
