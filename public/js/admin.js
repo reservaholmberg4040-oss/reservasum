@@ -5,8 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
-      await fetch('/api/admin/logout', { method: 'POST' });
+      try {
+        await fetch('/api/admin/logout', { method: 'POST' });
+      } catch (err) {
+        // Ignoramos error de red para forzar la redirección de todos modos
+      }
       window.location.href = '/admin';
+    });
+  }
+
+  // Botón Descargar PDF optimizado (impresión limpia)
+  const btnDownloadPdf = document.getElementById('btn-download-pdf');
+  if (btnDownloadPdf) {
+    btnDownloadPdf.addEventListener('click', () => {
+      window.print();
     });
   }
 
@@ -42,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const pin = document.getElementById('input-pin')?.value.trim();
 
       try {
-        // Petición a endpoint admin
         let res = await fetch('/api/admin/units/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
