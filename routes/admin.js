@@ -14,26 +14,6 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
-// --- Helper para guardar en db.js de forma segura ---
-function saveUnitsToDb(unitsList) {
-  if (typeof db.units.saveAll === 'function') {
-    return db.units.saveAll(unitsList);
-  }
-  if (typeof db.units.save === 'function') {
-    return db.units.save(unitsList);
-  }
-  if (typeof db.save === 'function') {
-    return db.save();
-  }
-}
-
-function getAllUnitsFromDb() {
-  if (typeof db.units.all === 'function') {
-    return db.units.all() || [];
-  }
-  return [];
-}
-
 // --- Autenticación ---
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -97,7 +77,7 @@ router.get('/report-log', requireAdmin, (req, res) => {
 
 // --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  res.json(getAllUnitsFromDb());
+  res.json(db.units.all());
 });
 
 router.put('/units/:id/pin', requireAdmin, (req, res) => {
@@ -126,16 +106,17 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
-// --- AGREGAR, IMPORTAR Y ELIMINAR ---
+// --- Agregar Unidad ---
 router.post('/units/add', requireAdmin, (req, res) => {
   try {
     const { unidad, piso, dto, propietario, pin } = req.body;
+
     if (!unidad) {
-      return res.status(400).json({ error: 'El campo unidad es obligatorio.' });
+      return res.status(400).json({ error: 'El número de unidad es obligatorio.' });
     }
 
     const uVal = String(unidad).padStart(4, '0');
-    const currentUnits = getAllUnitsFromDb();
+    const currentUnits = db.units.all();
 
     const exists = currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal);
     if (exists) {
@@ -152,14 +133,20 @@ router.post('/units/add', requireAdmin, (req, res) => {
     };
 
     currentUnits.push(newUnit);
-    saveUnitsToDb(currentUnits);
+
+    if (typeof db.units.saveAll === 'function') {
+      db.units.saveAll(currentUnits);
+    } else if (typeof db.save === 'function') {
+      db.save();
+    }
 
     res.json({ success: true, unit: newUnit });
   } catch (err) {
-    res.status(500).json({ error: 'Error al agregar la unidad.' });
+    res.status(500).json({ error: 'Error al intentar guardar la unidad.' });
   }
 });
 
+// --- Importar Excel ---
 router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
@@ -181,10 +168,15 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     });
 
     const replaceAll = req.query.replace === 'true';
-    let currentUnits = replaceAll ? [] : getAllUnitsFromDb();
+    let currentUnits = replaceAll ? [] : db.units.all();
 
     const mergedUnits = [...currentUnits, ...importedUnits];
-    saveUnitsToDb(mergedUnits);
+
+    if (typeof db.units.saveAll === 'function') {
+      db.units.saveAll(mergedUnits);
+    } else if (typeof db.save === 'function') {
+      db.save();
+    }
 
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
   } catch (err) {
@@ -192,17 +184,27 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
   }
 });
 
+// --- Eliminar Unidades ---
 router.delete('/units/delete', requireAdmin, (req, res) => {
   try {
     const { ids, deleteAll } = req.body;
     if (deleteAll) {
-      saveUnitsToDb([]);
+      if (typeof db.units.saveAll === 'function') {
+        db.units.saveAll([]);
+      } else if (typeof db.save === 'function') {
+        db.save();
+      }
       return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
     }
 
-    const currentUnits = getAllUnitsFromDb();
+    const currentUnits = db.units.all();
     const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id)));
-    saveUnitsToDb(filteredUnits);
+
+    if (typeof db.units.saveAll === 'function') {
+      db.units.saveAll(filteredUnits);
+    } else if (typeof db.save === 'function') {
+      db.save();
+    }
 
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
