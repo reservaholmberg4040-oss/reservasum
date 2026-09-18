@@ -228,7 +228,6 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
     pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
   } else {
     unitSel.disabled = false;
-    // Si ya está "desbloqueada" una unidad en Mis Reservas, se precarga para no volver a tipear el PIN.
     pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
     if (currentPinUnit) unitSel.value = currentPinUnit.id;
   }
@@ -270,7 +269,6 @@ async function onSubmitReserva(e) {
       data = await res.json();
       if (!res.ok) throw data;
       toast('¡Turno reservado con éxito! 🎉', 'success');
-      // Recordamos la unidad+PIN para esta sesión, así no hay que volver a tipearlo en la próxima reserva.
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
     toggleOverlay('formOverlay', false);
