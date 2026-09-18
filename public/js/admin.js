@@ -10,39 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Formulario de Envío de Informes
-  const reportForm = document.getElementById('report-form');
-  if (reportForm) {
-    reportForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const period = document.getElementById('month-select').value;
-      const recipient = document.getElementById('recipient-email').value;
-
-      try {
-        const res = await fetch('/api/admin/send-report', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ period, recipient })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          alert('Informe enviado correctamente por email.');
-          loadReportLog();
-        } else {
-          alert('Error: ' + data.error);
-        }
-      } catch (err) {
-        alert('Error al enviar el informe.');
-      }
-    });
-  }
-
-  // Modal para agregar unidad
+  // Modal Agregar Unidad
   const modal = document.getElementById('add-unit-modal');
   document.getElementById('btn-open-add-modal').addEventListener('click', () => modal.classList.add('active'));
   document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
 
-  // Formulario agregar unidad
+  // Guardar nueva unidad
   document.getElementById('add-unit-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const unidad = document.getElementById('input-unidad').value.trim();
@@ -72,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Cargar Excel
+  // Importar Excel
   document.getElementById('btn-upload-excel').addEventListener('click', async () => {
     const fileInput = document.getElementById('excel-file-input');
     const replaceAll = document.getElementById('chk-replace-all').checked;
@@ -134,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Error: ' + result.error);
         }
       } catch (err) {
-        alert('Error al conectar con el servidor.');
+        alert('Error de conexión.');
       }
     }
   });
@@ -158,13 +131,13 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Error: ' + result.error);
         }
       } catch (err) {
-        alert('Error al conectar con el servidor.');
+        alert('Error de conexión.');
       }
     }
   });
 });
 
-// Cargar tabla de unidades combinando { piso: "PB", dto: "LOCAL" } o { piso: "1", dto: "A" }
+// Cargar tabla con funciones de Edición de PIN y Propietario integradas
 async function loadUnits() {
   const tbody = document.getElementById('units-tbody');
   if (!tbody) return;
@@ -182,18 +155,22 @@ async function loadUnits() {
 
     units.forEach(u => {
       const tr = document.createElement('tr');
+      const unitId = u.id || u.unidad;
       const pisoDtoStr = u.piso && u.dto ? `${u.piso} ${u.dto}` : (u.piso || u.dto || '-');
 
       tr.innerHTML = `
         <td style="text-align: center;">
-          <input type="checkbox" class="unit-checkbox" value="${u.unidad}">
+          <input type="checkbox" class="unit-checkbox" value="${unitId}">
         </td>
         <td><strong>${u.unidad || ''}</strong></td>
         <td>${pisoDtoStr}</td>
         <td>${u.propietario || ''}</td>
         <td><code>${u.pin || '----'}</code></td>
         <td>
-           <button class="btn btn-ghost btn-sm" onclick="alert('Unidad: ${u.unidad}\\nPIN: ${u.pin}')">Ver PIN</button>
+          <div class="action-btn-group">
+            <button class="btn-xs" onclick="changePin('${unitId}', '${u.pin || ''}')">Cambiar PIN</button>
+            <button class="btn-xs" onclick="editPropietario('${unitId}', '${u.propietario || ''}')">Editar Prop.</button>
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
@@ -203,7 +180,57 @@ async function loadUnits() {
   }
 }
 
-// Historial de envíos de informes
+// Funciones globales para cambiar PIN y Editar Propietario
+window.changePin = async (unitId, currentPin) => {
+  const newPin = prompt(`Ingrese el nuevo PIN de 4 dígitos para la unidad ${unitId}:`, currentPin);
+  if (!newPin) return;
+
+  if (!/^\d{4}$/.test(newPin)) {
+    return alert('El PIN debe tener exactamente 4 números.');
+  }
+
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/pin`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: newPin })
+    });
+
+    if (res.ok) {
+      alert('PIN actualizado correctamente.');
+      loadUnits();
+    } else {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo actualizar el PIN.'));
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+  }
+};
+
+window.editPropietario = async (unitId, currentOwner) => {
+  const newOwner = prompt(`Editar nombre del propietario para la unidad ${unitId}:`, currentOwner);
+  if (newOwner === null) return;
+
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/propietario`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ propietario: newOwner })
+    });
+
+    if (res.ok) {
+      alert('Propietario actualizado.');
+      loadUnits();
+    } else {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo actualizar.'));
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+  }
+};
+
 async function loadReportLog() {
   const tbody = document.getElementById('history-tbody');
   if (!tbody) return;
