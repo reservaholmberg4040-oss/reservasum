@@ -1,16 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const fs = require('fs');
+const path = require('path');
 
-// Obtener todas las reservas (con filtros opcionales de año y unidad)
+const dbFile = path.join(__dirname, '../data/db.json');
+const unitsFile = path.join(__dirname, '../data/units.json');
+
+function readData(file, fallback) {
+  try {
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    }
+  } catch (e) {}
+  return fallback;
+}
+
+function writeData(file, data) {
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {}
+}
+
+// Obtener reservas
 router.get('/', (req, res) => {
   try {
     const { year, unit_id } = req.query;
-    let reservations = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
+    let reservations = readData(dbFile, []);
     
-    if (!Array.isArray(reservations)) {
-      reservations = [];
-    }
+    if (!Array.isArray(reservations)) reservations = [];
 
     if (year) {
       reservations = reservations.filter(r => r && r.date && String(r.date).startsWith(String(year)));
@@ -28,7 +45,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// Crear una reserva nueva
+// Crear reserva
 router.post('/', (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -36,16 +53,11 @@ router.post('/', (req, res) => {
     if (!unit_id) {
       return res.status(400).json({ error: 'Elegí una unidad.' });
     }
-    if (!unit_pin) {
-      return res.status(400).json({ error: 'Ingresá el PIN de la unidad.' });
-    }
     if (!date || !turno) {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
-    const units = typeof db.units.all === 'function' ? db.units.all() : [];
-    
-    // Búsqueda flexible de la unidad (admite ID, unidad o texto coincidente)
+    const units = readData(unitsFile, []);
     const targetUnit = Array.isArray(units) ? units.find(u => {
       if (!u) return false;
       const uId = String(u.id || '').trim();
@@ -55,20 +67,19 @@ router.post('/', (req, res) => {
     }) : null;
 
     if (!targetUnit) {
-      return res.status(400).json({ error: 'Unidad no encontrada en la base de datos.' });
+      return res.status(400).json({ error: 'Unidad no encontrada.' });
     }
 
-    // Validación de PIN flexible si la unidad tiene uno configurado
-    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin).trim()) {
+    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
       return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
     }
 
-    const allRes = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
-    const safeAllRes = Array.isArray(allRes) ? allRes : [];
-    
-    const occupied = safeAllRes.some(r => r && r.date === date && r.turno === turno);
+    let reservations = readData(dbFile, []);
+    if (!Array.isArray(reservations)) reservations = [];
+
+    const occupied = reservations.some(r => r && r.date === date && r.turno === turno);
     if (occupied) {
-      return res.status(400).json({ error: 'Ese turno ya está ocupado. Elegí otro.' });
+      return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
     const newReservation = {
@@ -84,50 +95,25 @@ router.post('/', (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    if (typeof db.reservations.add === 'function') {
-      db.reservations.add(newReservation);
-    } else {
-      safeAllRes.push(newReservation);
-      if (typeof db.reservations.saveAll === 'function') {
-        db.reservations.saveAll(safeAllRes);
-      }
-    }
+    reservations.push(newReservation);
+    writeData(dbFile, reservations);
 
     res.json({ ok: true, success: true, reservation: newReservation });
   } catch (err) {
-    console.error("Error al registrar reserva:", err);
+    console.error("Error crítico en POST /api/reservations:", err);
     res.status(500).json({ error: 'Error interno al registrar la reserva.' });
   }
 });
 
-// Cancelar una reserva existente
+// Cancelar reserva
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const { unit_pin } = req.body;
+    let reservations = readData(dbFile, []);
+    if (!Array.isArray(reservations)) reservations = [];
 
-    let allRes = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
-    const safeAllRes = Array.isArray(allRes) ? allRes : [];
-    const reservation = safeAllRes.find(r => r && String(r.id) === String(id));
-
-    if (!reservation) {
-      return res.status(404).json({ error: 'Reserva no encontrada.' });
-    }
-
-    const units = typeof db.units.all === 'function' ? db.units.all() : [];
-    const targetUnit = Array.isArray(units) ? units.find(u => 
-      u && (String(u.unidad) === String(reservation.unit_id) || String(u.id) === String(reservation.unit_id))
-    ) : null;
-
-    const isAdmin = req.session && req.session.isAdmin;
-    if (!isAdmin && targetUnit && targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
-      return res.status(400).json({ error: 'PIN incorrecto para cancelar la reserva.' });
-    }
-
-    const filtered = safeAllRes.filter(r => r && String(r.id) !== String(id));
-    if (typeof db.reservations.saveAll === 'function') {
-      db.reservations.saveAll(filtered);
-    }
+    const filtered = reservations.filter(r => r && String(r.id) !== String(id));
+    writeData(dbFile, filtered);
 
     res.json({ ok: true });
   } catch (err) {
