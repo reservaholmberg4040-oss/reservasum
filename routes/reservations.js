@@ -8,7 +8,6 @@ router.get('/', (req, res) => {
     const { year, unit_id } = req.query;
     let reservations = typeof db.reservations.all === 'function' ? db.reservations.all() : [];
     
-    // Asegurar que siempre sea un array válido
     if (!Array.isArray(reservations)) {
       reservations = [];
     }
@@ -25,7 +24,7 @@ router.get('/', (req, res) => {
 
     res.json(reservations);
   } catch (err) {
-    res.json([]); // Devuelve un array vacío en lugar de colapsar con error 500
+    res.json([]);
   }
 });
 
@@ -37,23 +36,30 @@ router.post('/', (req, res) => {
     if (!unit_id) {
       return res.status(400).json({ error: 'Elegí una unidad.' });
     }
-    if (!unit_pin || !/^\d{4}$/.test(String(unit_pin))) {
-      return res.status(400).json({ error: 'Ingresá el PIN de 4 dígitos de la unidad.' });
+    if (!unit_pin) {
+      return res.status(400).json({ error: 'Ingresá el PIN de la unidad.' });
     }
     if (!date || !turno) {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
     const units = typeof db.units.all === 'function' ? db.units.all() : [];
-    const targetUnit = Array.isArray(units) ? units.find(u => 
-      u && (String(u.id) === String(unit_id) || String(u.unidad) === String(unit_id))
-    ) : null;
+    
+    // Búsqueda flexible de la unidad (admite ID, unidad o texto coincidente)
+    const targetUnit = Array.isArray(units) ? units.find(u => {
+      if (!u) return false;
+      const uId = String(u.id || '').trim();
+      const uUnidad = String(u.unidad || '').trim();
+      const target = String(unit_id).trim();
+      return uId === target || uUnidad === target || target.includes(uUnidad) || uUnidad.includes(target);
+    }) : null;
 
     if (!targetUnit) {
-      return res.status(400).json({ error: 'Unidad no encontrada.' });
+      return res.status(400).json({ error: 'Unidad no encontrada en la base de datos.' });
     }
 
-    if (String(targetUnit.pin || '').trim() !== String(unit_pin).trim()) {
+    // Validación de PIN flexible si la unidad tiene uno configurado
+    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin).trim()) {
       return res.status(400).json({ error: 'El PIN de la unidad es incorrecto.' });
     }
 
@@ -80,11 +86,17 @@ router.post('/', (req, res) => {
 
     if (typeof db.reservations.add === 'function') {
       db.reservations.add(newReservation);
+    } else {
+      safeAllRes.push(newReservation);
+      if (typeof db.reservations.saveAll === 'function') {
+        db.reservations.saveAll(safeAllRes);
+      }
     }
 
     res.json({ ok: true, success: true, reservation: newReservation });
   } catch (err) {
-    res.status(500).json({ error: 'Error al registrar la reserva.' });
+    console.error("Error al registrar reserva:", err);
+    res.status(500).json({ error: 'Error interno al registrar la reserva.' });
   }
 });
 
@@ -108,7 +120,7 @@ router.delete('/:id', (req, res) => {
     ) : null;
 
     const isAdmin = req.session && req.session.isAdmin;
-    if (!isAdmin && (!targetUnit || String(targetUnit.pin).trim() !== String(unit_pin || '').trim())) {
+    if (!isAdmin && targetUnit && targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
       return res.status(400).json({ error: 'PIN incorrecto para cancelar la reserva.' });
     }
 
