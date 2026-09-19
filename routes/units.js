@@ -72,9 +72,6 @@ router.post('/:id/verify-pin', (req, res) => {
             return res.status(404).json({ error: 'Unidad no encontrada.' });
         }
 
-        // Validación opcional si querés bloquear la verificación de PIN si está dada de baja:
-        // if (unit.baja) { return res.status(400).json({ error: 'Esta unidad se encuentra dada de baja.' }); }
-
         if (unit.pin && String(unit.pin).trim() !== String(pin || '').trim()) {
             return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
         }
@@ -85,7 +82,7 @@ router.post('/:id/verify-pin', (req, res) => {
     }
 });
 
-// --- NUEVA RUTA --- PUT /:id/baja: Actualizar el estado de baja de una unidad
+// PUT /:id/baja: Actualizar el estado de baja de una unidad
 router.put('/:id/baja', (req, res) => {
     try {
         const { id } = req.params;
@@ -109,6 +106,30 @@ router.put('/:id/baja', (req, res) => {
     }
 });
 
+// PUT /:id/email: Actualizar el correo electrónico de una unidad
+router.put('/:id/email', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { email } = req.body;
+
+        const units = readUnitsFromFile();
+        const unitIndex = units.findIndex(u => 
+            u && (String(u.id) === String(id) || String(u.unidad) === String(id))
+        );
+
+        if (unitIndex === -1) {
+            return res.status(404).json({ error: 'Unidad no encontrada.' });
+        }
+
+        units[unitIndex].email = String(email || '').trim();
+        saveUnitsToFile(units);
+
+        res.json({ success: true, message: 'Email actualizado correctamente.' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al actualizar el email.' });
+    }
+});
+
 // POST /add: Agregar manualmente una o más unidades a las existentes
 router.post('/add', (req, res) => {
     try {
@@ -119,8 +140,9 @@ router.post('/add', (req, res) => {
             id: u.id || `u_${Date.now()}_${index}`,
             unidad: u.unidad || u.id || '',
             piso: u.piso || '',
-            depto: u.depto || '',
+            depto: u.depto || u.dto || '',
             propietario: u.propietario || '',
+            email: String(u.email || '').trim(),
             pin: u.pin || Math.floor(1000 + Math.random() * 9000).toString(),
             baja: false
         }));
@@ -149,8 +171,9 @@ router.post('/import-excel', upload.single('file'), (req, res) => {
             id: String(row['Unidad'] || row['unidad'] || `u_${Date.now()}_${index}`),
             unidad: String(row['Unidad'] || row['unidad'] || ''),
             piso: String(row['Piso'] || row['piso'] || row['piso/dto'] || row['PISO/DTO'] || ''),
-            depto: String(row['Depto'] || row['depto'] || ''),
+            depto: String(row['Depto'] || row['depto'] || row['dto'] || row['DTO'] || ''),
             propietario: String(row['Propietario'] || row['propietario'] || ''),
+            email: String(row['Email'] || row['email'] || row['CORREO'] || row['correo'] || ''),
             pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
             baja: false
         }));
