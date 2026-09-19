@@ -1,66 +1,62 @@
 const XLSX = require('xlsx');
-const db = require('../db');
+const fs = require('fs');
+const path = require('path');
 
 /**
- * Genera el informe mensual de reservas buscando de forma flexible y robusta.
+ * Genera el informe mensual leyendo directamente del archivo JSON de reservas
+ * para evitar cualquier fallo de abstracción en el módulo db.js.
  * @param {string} period - El período a consultar en formato YYYY-MM (ej: "2026-09")
  */
 function buildMonthlyReport(period) {
   let allRows = [];
+  
   try {
-    // 1. Intentamos obtener todas las reservas de la base de datos
-    let rawAll = [];
-    if (db.reservations && typeof db.reservations.all === 'function') {
-      rawAll = db.reservations.all();
-    }
-
-    // 2. Aseguramos que rawAll sea un arreglo plano
-    if (!Array.isArray(rawAll)) {
-      if (typeof rawAll === 'object' && rawAll !== null) {
-        // Si es un objeto {0: {...}, 1: {...}}, lo convertimos a array
-        rawAll = Object.values(rawAll);
-      } else {
-        rawAll = [];
+    // 1. Leemos directamente el archivo db.json donde se guardan las reservas
+    const dbFilePath = path.join(__dirname, '../data/db.json');
+    
+    if (fs.existsSync(dbFilePath)) {
+      const fileContent = fs.readFileSync(dbFilePath, 'utf8');
+      const parsedData = JSON.parse(fileContent);
+      
+      // Normalizamos a un array plano sin importar cómo esté estructurado
+      if (Array.isArray(parsedData)) {
+        allRows = parsedData;
+      } else if (parsedData && typeof parsedData === 'object') {
+        allRows = Object.values(parsedData);
       }
+    } else {
+      console.warn('[REPORT] No se encontró el archivo db.json en:', dbFilePath);
     }
 
-    // 3. Filtramos manualmente por el período (YYYY-MM) de forma flexible
-    allRows = rawAll.filter(r => {
+    console.log(`[REPORT DEBUG] Total de reservas totales en la base de datos:`, allRows.length);
+    console.log(`[REPORT DEBUG] Período solicitado para el reporte:`, period);
+
+    // 2. Filtramos estrictamente por el período (YYYY-MM)
+    allRows = allRows.filter(r => {
       if (!r || typeof r !== 'object') return false;
       
-      // Buscamos en todas las propiedades posibles donde la fecha pueda estar guardada
-      // 'fecha' es para compatibilidad con datos ingresados manualmente o en español
-      const possibleDateKeys = ['date', 'fecha', 'day', 'created_at', 'start_time', 'startTime', 'start'];
-      let fechaEncontrada = null;
-
-      for (const key of possibleDateKeys) {
-        if (r[key]) {
-          fechaEncontrada = String(r[key]);
-          break;
-        }
-      }
-
-      // Si encontramos una propiedad con fecha, verificamos si coincide con el período
-      if (fechaEncontrada) {
-        // Asumimos formato YYYY-MM-DD o similar que contenga "YYYY-MM"
-        return fechaEncontrada.includes(period);
-      }
+      // Verificamos en los campos donde se almacena la fecha de la reserva
+      const fechaReserva = String(r.date || r.fecha || r.day || '');
       
-      return false; // Si no tiene fecha, no entra en el informe
+      // Si la fecha comienza con el período (ej: "2026-09-15" empieza con "2026-09")
+      return fechaReserva.startsWith(period) || fechaReserva.includes(period);
     });
 
+    console.log(`[REPORT DEBUG] Reservas filtradas coincidentes con ${period}:`, allRows.length);
+
   } catch (e) {
-    console.error('Error crítico al obtener reservas para el reporte:', e);
+    console.error('Error crítico al leer las reservas para el reporte:', e);
     allRows = [];
   }
 
+  // 3. Procesamos los totales por unidad
   const totalsMap = {};
   for (const r of allRows) {
-    // Identificamos la unidad de forma segura
-    const key = r.unidad || r.unit || r.piso_depto || 'S/N';
-    if (!totalsMap[key]) {
-      totalsMap[key] = { 
-        unidad: r.unidad || r.unit || 'S/N', 
+    const unidadKey = r.unit_id || r.unidad || r.unit || 'S/N';
+    
+    if (!totalsMap[unidadKey]) {
+      totalsMap[unidadKey] = { 
+        unidad: unidadKey, 
         piso: r.piso || '', 
         dto: r.dto || '', 
         propietario: r.propietario || 'Sin Propietario', 
@@ -71,52 +67,41 @@ function buildMonthlyReport(period) {
       };
     }
     
-    // Identificamos el turno de forma flexible
     const turnoStr = String(r.turno || r.shift || '').toLowerCase();
     if (turnoStr.includes('dia') || turnoStr.includes('día') || turnoStr === 'd') {
-      totalsMap[key].turnos_dia++;
+      totalsMap[unidadKey].turnos_dia++;
     } else {
-      totalsMap[key].turnos_noche++;
+      totalsMap[unidadKey].turnos_noche++;
     }
-    totalsMap[key].total_turnos++;
+    totalsMap[unidadKey].total_turnos++;
     
-    // Obtenemos la fecha para el resumen, buscando en los mismos campos posibles
-    let fechaRes = '';
-    const possibleDateKeys = ['date', 'fecha', 'day', 'created_at', 'start_time', 'startTime', 'start'];
-    for (const key of possibleDateKeys) { if(r[key]) { fechaRes = r[key]; break; } }
-
-    totalsMap[key].fechas.push(`${fechaRes} (${turnoStr.includes('dia') || turnoStr.includes('día') ? 'Día' : 'Noche'})`);
+    const fechaStr = r.date || r.fecha || '';
+    totalsMap[unidadKey].fechas.push(`${fechaStr} (${turnoStr.includes('dia') || turnoStr.includes('día') ? 'Día' : 'Noche'})`);
   }
 
   const totalsByUnit = Object.values(totalsMap)
     .map(t => ({ ...t, fechas: t.fechas.sort() }))
     .sort((a, b) => String(a.unidad).localeCompare(String(b.unidad)));
 
-  // Datos para la pestaña Detalle de Reservas
+  // 4. Armamos los datos para la pestaña de Detalle
   const detailSheetData = allRows.map(r => {
-    // Obtener la fecha y el nombre de usuario de forma segura
-    let fechaStr = '';
-    const possibleDateKeys = ['date', 'fecha', 'day', 'created_at', 'start_time', 'startTime', 'start'];
-    for (const key of possibleDateKeys) { if(r[key]) { fechaStr = r[key]; break; } }
-    
-    const nombreUsuario = r.nombre || r.name || r.usuario || '';
-    const apellidoUsuario = r.apellido || r.surname || '';
-    const usuarioStr = `${nombreUsuario} ${apellidoUsuario}`.trim();
+    const fechaStr = r.date || r.fecha || '';
+    const turnoClean = String(r.turno || '').toLowerCase().includes('dia') || String(r.turno || '').includes('día') ? 'Día' : 'Noche';
+    const nombreUsuario = `${r.nombre || ''} ${r.apellido || ''}`.trim();
 
     return {
       Fecha: fechaStr,
-      Turno: String(r.turno || r.shift || '').toLowerCase().includes('dia') || String(r.turno || '').includes('día') ? 'Día' : 'Noche',
-      Unidad: r.unidad || r.unit || '',
+      Turno: turnoClean,
+      Unidad: r.unit_id || r.unidad || '',
       Piso: r.piso || '',
       Dto: r.dto || '',
       Propietario: r.propietario || '',
-      'Reservado por': usuarioStr,
-      'Detalles de reserva': r.detalle || r.reservo || '',
-      'Fecha de creación': r.created_at || ''
+      'Reservado por': nombreUsuario || 'Anónimo',
+      'Fecha de creación': r.createdAt || r.created_at || ''
     };
   });
 
-  // Datos para la pestaña Resumen por Unidad
+  // 5. Armamos los datos para la pestaña de Resumen
   const summarySheetData = totalsByUnit.map(t => ({
     Unidad: t.unidad,
     Piso: t.piso,
@@ -131,18 +116,18 @@ function buildMonthlyReport(period) {
   let buffer = null;
   try {
     const wb = XLSX.utils.book_new();
-    const wsSummary = XLSX.utils.json_to_sheet(summarySheetData.length > 0 ? summarySheetData : [{ Mensaje: 'Sin datos registrados para el período.' }]);
-    const wsDetail = XLSX.utils.json_to_sheet(detailSheetData.length > 0 ? detailSheetData : [{ Mensaje: 'Sin datos registrados para el período.' }]);
+    const wsSummary = XLSX.utils.json_to_sheet(summarySheetData.length > 0 ? summarySheetData : [{ Mensaje: 'Sin datos registrados para el período seleccionado.' }]);
+    const wsDetail = XLSX.utils.json_to_sheet(detailSheetData.length > 0 ? detailSheetData : [{ Mensaje: 'Sin datos registrados para el período seleccionado.' }]);
+    
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen por Unidad');
     XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle de Reservas');
-    // Generamos el archivo como un buffer para enviarlo directamente
+    
     buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   } catch (e) {
-    console.error('Error generando Excel:', e);
+    console.error('Error generando el archivo Excel:', e);
   }
 
   const filename = `informe-reservas-SUM-Holmberg4040-${period}.xlsx`;
-  // Retornamos el buffer y el nombre, además de las filas para depurar si es necesario
   return { buffer, filename, rows: allRows, totalsByUnit };
 }
 
