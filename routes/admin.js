@@ -109,6 +109,25 @@ router.get('/dashboard', requireAdmin, (req, res) => {
   }
 });
 
+// --- Descarga de Informe en Excel ---
+router.get('/download-report', requireAdmin, (req, res) => {
+  try {
+    const period = req.query.period || new Date().toISOString().slice(0, 7);
+    const report = buildMonthlyReport(period);
+
+    if (!report || !report.buffer) {
+      return res.status(404).json({ error: 'No se pudo generar el reporte para este período.' });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.filename}"`);
+    return res.send(report.buffer);
+  } catch (err) {
+    console.error('Error al descargar el reporte:', err);
+    res.status(500).json({ error: 'Error interno al generar la descarga.' });
+  }
+});
+
 router.get('/report-log', requireAdmin, (req, res) => {
   try {
     const logs = (db.reportLog && typeof db.reportLog.all === 'function') ? db.reportLog.all() : [];
