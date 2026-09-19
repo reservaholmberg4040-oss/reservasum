@@ -5,9 +5,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 // IMPORTANTE: Usamos una única instancia consistente de db
 const db = require('../db'); 
-// Corregimos la ruta de importación de report.js
 const { buildMonthlyReport } = require('../utils/report'); 
-// Las funciones de mailer no se usaron en este bloque, pero las dejamos por las dudas
 const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -183,24 +181,4 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
 
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-    const importedUnits = rows.map((row, index) => {
-      const uVal = String(row['Unidad'] || row['unidad'] || `00${index + 1}`).padStart(4, '0');
-      return {
-        id: uVal,
-        unidad: uVal,
-        piso: String(row['Piso'] || row['piso'] || 'PB'),
-        depto: String(row['Depto'] || row['depto'] || row['DTO'] || 'A'),
-        propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
-        pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
-        baja: false // Unidades importadas inician activas
-      };
-    });
-
-    const replaceAll = req.query.replace === 'true';
-    let mergedUnits = replaceAll ? [] : db.units.all();
-    mergedUnits = [...mergedUnits, ...importedUnits];
-
-    db.units.saveAll(mergedUnits);
-    res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
+    const rows = xls
