@@ -2,23 +2,33 @@ const XLSX = require('xlsx');
 const db = require('../db');
 
 /**
- * Genera un informe mensual de reservas de forma totalmente segura.
+ * Genera un informe mensual de reservas buscando y filtrando de forma robusta.
  * @param {string} period - "YYYY-MM"
  */
 function buildMonthlyReport(period) {
   let allRows = [];
   try {
+    // 1. Intentamos obtener todas las reservas posibles de la base de datos
     let rawAll = [];
-    if (db.reservations && typeof db.reservations.byPeriod === 'function') {
-      rawAll = db.reservations.byPeriod(period) || [];
-    } else if (db.reservations && typeof db.reservations.all === 'function') {
-      const res = db.reservations.all();
-      rawAll = Array.isArray(res) ? res : [];
+    if (db.reservations && typeof db.reservations.all === 'function') {
+      rawAll = db.reservations.all();
+    } else if (db.reservations && typeof db.reservations.byPeriod === 'function') {
+      rawAll = db.reservations.byPeriod(period);
     }
-    allRows = Array.isArray(rawAll) ? rawAll.filter(r => {
-      const d = r && (r.date || r.fecha) ? String(r.date || r.fecha) : '';
-      return d.startsWith(period);
-    }) : [];
+
+    // Aseguramos que sea un arreglo plano
+    if (!Array.isArray(rawAll) && rawAll) {
+      rawAll = Object.values(rawAll);
+    }
+
+    // 2. Filtramos manualmente por el período (YYYY-MM) evaluando cualquier formato de fecha
+    allRows = (Array.isArray(rawAll) ? rawAll : []).filter(r => {
+      if (!r) return false;
+      // Buscamos en todas las propiedades posibles donde suela estar la fecha
+      const fechaStr = String(r.date || r.fecha || r.day || r.created_at || '');
+      return fechaStr.startsWith(period) || fechaStr.includes(period);
+    });
+
   } catch (e) {
     console.error('Error al obtener reservas para el reporte:', e);
     allRows = [];
@@ -26,10 +36,10 @@ function buildMonthlyReport(period) {
 
   const totalsMap = {};
   for (const r of allRows) {
-    const key = r.unidad || r.unit || 'S/N';
+    const key = r.unidad || r.unit || r.piso || 'S/N';
     if (!totalsMap[key]) {
       totalsMap[key] = { 
-        unidad: key, 
+        unidad: r.unidad || r.unit || 'S/N', 
         piso: r.piso || '', 
         dto: r.dto || '', 
         propietario: r.propietario || 'Sin Propietario', 
@@ -39,13 +49,16 @@ function buildMonthlyReport(period) {
         fechas: [] 
       };
     }
-    const turno = r.turno || r.shift || 'dia';
-    if (turno === 'dia') totalsMap[key].turnos_dia++;
-    else totalsMap[key].turnos_noche++;
+    const turno = String(r.turno || r.shift || '').toLowerCase();
+    if (turno.includes('dia') || turno === 'd') {
+      totalsMap[key].turnos_dia++;
+    } else {
+      totalsMap[key].turnos_noche++;
+    }
     totalsMap[key].total_turnos++;
     
     const fechaRes = r.date || r.fecha || '';
-    totalsMap[key].fechas.push(`${fechaRes} (${turno === 'dia' ? 'Día' : 'Noche'})`);
+    totalsMap[key].fechas.push(`${fechaRes} (${turno.includes('dia') ? 'Día' : 'Noche'})`);
   }
 
   const totalsByUnit = Object.values(totalsMap)
@@ -54,7 +67,7 @@ function buildMonthlyReport(period) {
 
   const detailSheetData = allRows.map(r => ({
     Fecha: r.date || r.fecha || '',
-    Turno: (r.turno || r.shift) === 'dia' ? 'Día' : 'Noche',
+    Turno: String(r.turno || '').toLowerCase().includes('dia') ? 'Día' : 'Noche',
     Unidad: r.unidad || r.unit || '',
     Piso: r.piso || '',
     Dto: r.dto || '',
