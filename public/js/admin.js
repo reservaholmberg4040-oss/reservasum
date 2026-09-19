@@ -83,7 +83,7 @@ function initAdminPanel() {
     });
   }
 
-  // --- BOTÓN DESCARGAR EXCEL (Solución definitiva para tomar el período seleccionado) ---
+  // --- BOTÓN DESCARGAR EXCEL ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', () => {
@@ -97,12 +97,11 @@ function initAdminPanel() {
         period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
 
-      // Redirige correctamente pasando el período como parámetro GET al backend
       window.location.href = `/api/admin/download-report?period=${period}`;
     });
   }
 
-  // Manejo del formulario de envío de reporte por correo (si está implementado)
+  // Manejo del formulario de envío de reporte por correo
   const reportForm = document.getElementById('report-form');
   if (reportForm) {
     reportForm.addEventListener('submit', async (e) => {
@@ -111,7 +110,6 @@ function initAdminPanel() {
       const recipient = document.getElementById('recipient-email')?.value || '';
       
       alert(`Funcionalidad de envío por mail seleccionada para el período ${period} a ${recipient}.`);
-      // Acá podés integrar tu lógica de fetch para enviar el reporte por mail si corresponde.
     });
   }
 
@@ -144,13 +142,14 @@ function initAdminPanel() {
       const piso = document.getElementById('input-piso')?.value.trim();
       const depto = document.getElementById('input-dto')?.value.trim();
       const propietario = document.getElementById('input-propietario')?.value.trim();
+      const email = document.getElementById('input-email')?.value.trim();
       const pin = document.getElementById('input-pin')?.value.trim();
 
       try {
         let res = await fetch('/api/admin/units/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unidad, piso, depto, propietario, pin })
+          body: JSON.stringify({ unidad, piso, depto, propietario, email, pin })
         });
 
         const result = await res.json();
@@ -326,7 +325,7 @@ async function loadUnits() {
 
     tbody.innerHTML = '';
     if (!Array.isArray(units) || units.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center; padding: 15px;">No hay unidades registradas.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center; padding: 15px;">No hay unidades registradas.</td></tr>';
       return;
     }
 
@@ -344,6 +343,9 @@ async function loadUnits() {
         <td>${pisoDtoStr}</td>
         <td>
           <input type="text" class="inline-edit" value="${u.propietario || ''}" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:100%; box-sizing:border-box;" onchange="updatePropietario('${unitId}', this.value)">
+        </td>
+        <td>
+          <input type="email" class="inline-edit" value="${u.email || ''}" placeholder="correo@ejemplo.com" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:100%; box-sizing:border-box;" onchange="updateEmail('${unitId}', this.value)">
         </td>
         <td>
           <input type="text" maxlength="4" class="inline-edit" value="${u.pin || ''}" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:70px; text-align:center; font-family:monospace;" onchange="updatePin('${unitId}', this.value)">
@@ -371,7 +373,7 @@ async function loadUnits() {
     });
 
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center; padding: 15px;">Error al cargar unidades.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center; padding: 15px;">Error al cargar unidades.</td></tr>';
   }
 }
 
@@ -415,6 +417,25 @@ window.updatePropietario = async (unitId, newOwner) => {
     if (!res.ok) {
       const err = await res.json();
       alert('Error: ' + (err.error || 'No se pudo guardar el propietario.'));
+      loadUnits();
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+    loadUnits();
+  }
+};
+
+window.updateEmail = async (unitId, newEmail) => {
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/email`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: newEmail })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo guardar el email.'));
       loadUnits();
     }
   } catch (err) {
