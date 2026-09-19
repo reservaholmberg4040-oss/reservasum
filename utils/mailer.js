@@ -91,7 +91,7 @@ function previousMonthPeriod() {
   const d = new Date();
   d.setDate(1);
   d.setMonth(d.getMonth() - 1);
-  return d.toISOString().slice(0, 7); // YYYY-MM
+  return d.toISOString().slice(0, 7);
 }
 
 function scheduleMonthlyReport() {
