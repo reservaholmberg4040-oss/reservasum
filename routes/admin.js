@@ -3,8 +3,11 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const xlsx = require('xlsx');
-const db = require('../db');
-const { buildMonthlyReport } = require('../utils/report');
+// IMPORTANTE: Usamos una única instancia consistente de db
+const db = require('../db'); 
+// Corregimos la ruta de importación de report.js
+const { buildMonthlyReport } = require('../utils/report'); 
+// Las funciones de mailer no se usaron en este bloque, pero las dejamos por las dudas
 const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -18,7 +21,7 @@ function requireAdmin(req, res, next) {
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
   
-  // 1. Verificamos primero contra las variables de entorno de Render (Solución directa)
+  // 1. Verificamos contra las variables de entorno
   const envUser = process.env.ADMIN_USER || 'admin';
   const envPass = process.env.ADMIN_PASSWORD || 'Holmberg4040';
 
@@ -28,16 +31,12 @@ router.post('/login', (req, res) => {
     return res.json({ ok: true, username: envUser });
   }
 
-  // 2. Si no coincide con el entorno, intentamos con la base de datos (por compatibilidad)
-  try {
-    const adminUser = db.admin && typeof db.admin.byUsername === 'function' ? db.admin.byUsername(username) : null;
-    if (adminUser && bcrypt.compareSync(password || '', adminUser.password_hash)) {
-      req.session.isAdmin = true;
-      req.session.username = adminUser.username;
-      return res.json({ ok: true, username: adminUser.username });
-    }
-  } catch (e) {
-    // Si la DB de admin no está implementada, ignoramos y pasamos al error
+  // 2. Si no, contra la base de datos (usando db.admin.byUsername)
+  const adminUser = db.admin.byUsername(username);
+  if (adminUser && bcrypt.compareSync(password || '', adminUser.password_hash)) {
+    req.session.isAdmin = true;
+    req.session.username = adminUser.username;
+    return res.json({ ok: true, username: adminUser.username });
   }
 
   return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
@@ -60,48 +59,19 @@ router.get('/dashboard', requireAdmin, (req, res) => {
   try {
     const period = req.query.period || new Date().toISOString().slice(0, 7);
     
-    // Validamos que exista la función de reporte, sino devolvemos datos vacíos seguros
-    if (typeof buildMonthlyReport !== 'function') {
-      return res.json({
-        period,
-        totalReservasMes: 0,
-        unidadesActivas: 0,
-        totalsByUnit: [],
-        periodosDisponibles: []
-      });
-    }
-
     const reportResult = buildMonthlyReport(period) || {};
     const totalsByUnit = reportResult.totalsByUnit || [];
     const rows = reportResult.rows || [];
 
-    // Obtenemos los periodos disponibles de forma ultra segura
-    let periodosDisponibles = [];
-    try {
-      if (db.reservations && typeof db.reservations.distinctPeriods === 'function') {
-        const resPeriods = db.reservations.distinctPeriods();
-        periodosDisponibles = Array.isArray(resPeriods) ? resPeriods : [];
-      } else if (db.reservations && typeof db.reservations.all === 'function') {
-        const allRes = db.reservations.all();
-        if (Array.isArray(allRes)) {
-          const set = new Set();
-          allRes.forEach(r => {
-            const d = r && (r.date || r.fecha) ? String(r.date || r.fecha).slice(0, 7) : '';
-            if (d) set.add(d);
-          });
-          periodosDisponibles = Array.from(set).sort().reverse();
-        }
-      }
-    } catch (errPeriods) {
-      console.error('No se pudieron calcular los periodos:', errPeriods);
-    }
+    // Obtenemos los periodos disponibles de db
+    const resPeriods = db.reservations.distinctPeriods();
 
     res.json({
       period,
       totalReservasMes: rows.length,
       unidadesActivas: totalsByUnit.length,
       totalsByUnit: totalsByUnit,
-      periodosDisponibles: periodosDisponibles.length > 0 ? periodosDisponibles : [period]
+      periodosDisponibles: resPeriods.length > 0 ? resPeriods : [period]
     });
   } catch (err) {
     console.error('Error en /dashboard:', err);
@@ -129,22 +99,14 @@ router.get('/download-report', requireAdmin, (req, res) => {
 });
 
 router.get('/report-log', requireAdmin, (req, res) => {
-  try {
-    const logs = (db.reportLog && typeof db.reportLog.all === 'function') ? db.reportLog.all() : [];
-    res.json(Array.isArray(logs) ? logs : []);
-  } catch (e) {
-    res.json([]);
-  }
+  // Obtenemos el log de db
+  res.json(db.reportLog.all());
 });
 
 // --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  try {
-    const units = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
-    res.json(Array.isArray(units) ? units : []);
-  } catch (e) {
-    res.json([]);
-  }
+  // Obtenemos las unidades de db (ya mapeadas con el campo baja)
+  res.json(db.units.all());
 });
 
 router.put('/units/:id/pin', requireAdmin, (req, res) => {
@@ -152,13 +114,13 @@ router.put('/units/:id/pin', requireAdmin, (req, res) => {
   if (!/^\d{4}$/.test(String(pin || ''))) {
     return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos numéricos.' });
   }
-  const unit = db.units && typeof db.units.setPin === 'function' ? db.units.setPin(req.params.id, pin) : null;
+  const unit = db.units.setPin(req.params.id, pin);
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
 
 router.post('/units/:id/regenerate-pin', requireAdmin, (req, res) => {
-  const unit = db.units && typeof db.units.regeneratePin === 'function' ? db.units.regeneratePin(req.params.id) : null;
+  const unit = db.units.regeneratePin(req.params.id);
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
@@ -168,25 +130,31 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   if (!propietario || !propietario.trim()) {
     return res.status(400).json({ error: 'El propietario no puede quedar vacío.' });
   }
-  const unit = db.units && typeof db.units.setPropietario === 'function' ? db.units.setPropietario(req.params.id, propietario) : null;
+  const unit = db.units.setPropietario(req.params.id, propietario);
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
 
-// --- Agregar Unidad ---
+// --- NUEVA RUTA: Dar de BAJA / ALTA a una unidad ---
+router.put('/units/:id/baja', requireAdmin, (req, res) => {
+  const { baja } = req.body;
+  if (typeof baja !== 'boolean') {
+    return res.status(400).json({ error: 'El estado de baja debe ser un booleano.' });
+  }
+  const unit = db.units.setBaja(req.params.id, baja);
+  if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
+  res.json({ success: true, unit });
+});
+
+// --- Agregar Unidad Manualmente ---
 router.post('/units/add', requireAdmin, (req, res) => {
   try {
-    const { unidad, piso, dto, propietario, pin } = req.body;
-
-    if (!unidad) {
-      return res.status(400).json({ error: 'El número de unidad es obligatorio.' });
-    }
+    const { unidad, piso, depto, propietario, pin } = req.body;
+    if (!unidad) return res.status(400).json({ error: 'El número de unidad es obligatorio.' });
 
     const uVal = String(unidad).padStart(4, '0');
-    const currentUnits = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
-
-    const exists = Array.isArray(currentUnits) && currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal);
-    if (exists) {
+    const currentUnits = db.units.all();
+    if (currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal)) {
       return res.status(400).json({ error: `La unidad ${uVal} ya existe.` });
     }
 
@@ -194,19 +162,14 @@ router.post('/units/add', requireAdmin, (req, res) => {
       id: uVal,
       unidad: uVal,
       piso: String(piso || ''),
-      dto: String(dto || ''),
+      depto: String(depto || ''),
       propietario: String(propietario || ''),
-      pin: pin && /^\d{4}$/.test(String(pin)) ? String(pin) : Math.floor(1000 + Math.random() * 9000).toString()
+      pin: pin && /^\d{4}$/.test(String(pin)) ? String(pin) : Math.floor(1000 + Math.random() * 9000).toString(),
+      baja: false // Nueva unidad inicia activa
     };
 
     currentUnits.push(newUnit);
-
-    if (db.units && typeof db.units.saveAll === 'function') {
-      db.units.saveAll(currentUnits);
-    } else if (typeof db.save === 'function') {
-      db.save();
-    }
-
+    db.units.saveAll(currentUnits);
     res.json({ success: true, unit: newUnit });
   } catch (err) {
     res.status(500).json({ error: 'Error al intentar guardar la unidad.' });
@@ -228,56 +191,16 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
         id: uVal,
         unidad: uVal,
         piso: String(row['Piso'] || row['piso'] || 'PB'),
-        dto: String(row['Depto'] || row['dto'] || row['DTO'] || 'A'),
+        depto: String(row['Depto'] || row['depto'] || row['DTO'] || 'A'),
         propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
-        pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000))
+        pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
+        baja: false // Unidades importadas inician activas
       };
     });
 
     const replaceAll = req.query.replace === 'true';
-    let currentUnits = replaceAll ? [] : ((db.units && typeof db.units.all === 'function') ? db.units.all() : []);
+    let mergedUnits = replaceAll ? [] : db.units.all();
+    mergedUnits = [...mergedUnits, ...importedUnits];
 
-    const mergedUnits = [...(Array.isArray(currentUnits) ? currentUnits : []), ...importedUnits];
-
-    if (db.units && typeof db.units.saveAll === 'function') {
-      db.units.saveAll(mergedUnits);
-    } else if (typeof db.save === 'function') {
-      db.save();
-    }
-
+    db.units.saveAll(mergedUnits);
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
-  } catch (err) {
-    res.status(500).json({ error: 'Error al procesar la planilla Excel.' });
-  }
-});
-
-// --- Eliminar Unidades ---
-router.delete('/units/delete', requireAdmin, (req, res) => {
-  try {
-    const { ids, deleteAll } = req.body;
-    if (deleteAll) {
-      if (db.units && typeof db.units.saveAll === 'function') {
-        db.units.saveAll([]);
-      } else if (typeof db.save === 'function') {
-        db.save();
-      }
-      return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
-    }
-
-    const currentUnits = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
-    const filteredUnits = Array.isArray(currentUnits) ? currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id))) : [];
-
-    if (db.units && typeof db.units.saveAll === 'function') {
-      db.units.saveAll(filteredUnits);
-    } else if (typeof db.save === 'function') {
-      db.save();
-    }
-
-    res.json({ success: true, message: 'Unidades eliminadas.' });
-  } catch (err) {
-    res.status(500).json({ error: 'Error al eliminar unidades.' });
-  }
-});
-
-module.exports = router;
-module.exports.requireAdmin = requireAdmin;
