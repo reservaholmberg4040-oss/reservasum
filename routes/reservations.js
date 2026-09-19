@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const db = require('../db'); // Para gestionar las unidades de forma segura
+const db = require('../db'); 
 const { sendReservationConfirmation } = require('../utils/mailer');
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
@@ -29,7 +29,17 @@ function writeReservations(data) {
   }
 }
 
-// GET /api/reservations — Devuelve todas las reservas para poblar el calendario
+// Función auxiliar para normalizar textos (quita acentos, pasa a minúsculas y quita espacios)
+function normalizeStr(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+// GET /api/reservations
 router.get('/', (req, res) => {
   try {
     const reservations = readReservations();
@@ -79,9 +89,20 @@ router.post('/', async (req, res) => {
     let reservations = readReservations();
     if (!Array.isArray(reservations)) reservations = [];
 
-    // Validamos si el turno ya está ocupado de forma exacta
-    const occupied = reservations.some(r => r && String(r.date).trim() === String(date).trim() && String(r.turno).trim() === String(turno).trim());
+    // Depuración en consola del servidor
+    console.log(`[RESERVA INTENTO] Fecha: "${date}" | Turno: "${turno}" (Normalizado: "${normalizeStr(turno)}")`);
+
+    // Validación flexible y robusta de turnos ocupados
+    const occupied = reservations.some(r => {
+      if (!r) return false;
+      const rDate = String(r.date || '').trim();
+      const rTurnoNorm = normalizeStr(r.turno);
+      const reqTurnoNorm = normalizeStr(turno);
+      return rDate === String(date).trim() && rTurnoNorm === reqTurnoNorm;
+    });
+
     if (occupied) {
+      console.log(`[BLOQUEADO] El turno ya figura ocupado en la base de datos.`);
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
