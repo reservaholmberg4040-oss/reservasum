@@ -8,6 +8,7 @@ function todayISO() { const t = new Date(); return toISODate(t.getFullYear(), t.
 
 function toast(msg, type = '') {
   const wrap = document.getElementById('toastWrap');
+  if (!wrap) return;
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
@@ -22,20 +23,26 @@ function unitLabel(u) {
 // ---------- Estado ----------
 let currentYear = new Date().getFullYear();
 let units = [];
-let reservationsByDate = {}; // { 'YYYY-MM-DD': { dia: reservation|null, noche: reservation|null } }
+let reservationsByDate = {}; 
 let selectedDate = null;
-let currentPinUnit = null; // { id, pin } — unidad "desbloqueada" en la pestaña Mis Reservas
+let currentPinUnit = null; 
+let isSubmittingReservation = false; // Bloqueo anti-doble envío a nivel global
 
 // ---------- Carga inicial ----------
 async function init() {
   const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-  if (cfg.buildingName) document.getElementById('buildingName').textContent = cfg.buildingName;
+  if (cfg.buildingName) {
+    const bName = document.getElementById('buildingName');
+    if (bName) bName.textContent = cfg.buildingName;
+  }
 
   units = await fetch('/api/units').then(r => r.json());
   populateUnitSelect('unitSelect');
   populateUnitSelect('misUnitSelect');
 
-  document.getElementById('yearLabel').textContent = currentYear;
+  const yLabel = document.getElementById('yearLabel');
+  if (yLabel) yLabel.textContent = currentYear;
+  
   await loadYear(currentYear);
   renderYearGrid();
 
@@ -56,6 +63,7 @@ async function loadYear(year) {
 
 function populateUnitSelect(selectId) {
   const sel = document.getElementById(selectId);
+  if (!sel) return;
   sel.innerHTML = '<option value="">Seleccioná la unidad...</option>' +
     units.map(u => `<option value="${u.unidad || u.id}">${unitLabel(u)}</option>`).join('');
 }
@@ -72,33 +80,46 @@ function setupTabs() {
 
 function goToTab(tab, preselectUnitId) {
   document.querySelectorAll('.nav-links a[data-tab]').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
-  document.getElementById('tab-calendario').style.display = tab === 'calendario' ? '' : 'none';
-  document.getElementById('tab-misreservas').style.display = tab === 'misreservas' ? '' : 'none';
+  const tabCal = document.getElementById('tab-calendario');
+  const tabMis = document.getElementById('tab-misreservas');
+  if (tabCal) tabCal.style.display = tab === 'calendario' ? '' : 'none';
+  if (tabMis) tabMis.style.display = tab === 'misreservas' ? '' : 'none';
   if (tab === 'misreservas' && preselectUnitId) {
-    document.getElementById('misUnitSelect').value = preselectUnitId;
-    document.getElementById('misPinInput').focus();
+    const misUnit = document.getElementById('misUnitSelect');
+    const misPin = document.getElementById('misPinInput');
+    if (misUnit) misUnit.value = preselectUnitId;
+    if (misPin) misPin.focus();
   }
 }
 
 // ---------- Year switcher ----------
 function setupYearSwitcher() {
-  document.getElementById('prevYear').addEventListener('click', async () => {
-    currentYear--;
-    document.getElementById('yearLabel').textContent = currentYear;
-    await loadYear(currentYear);
-    renderYearGrid();
-  });
-  document.getElementById('nextYear').addEventListener('click', async () => {
-    currentYear++;
-    document.getElementById('yearLabel').textContent = currentYear;
-    await loadYear(currentYear);
-    renderYearGrid();
-  });
+  const prevBtn = document.getElementById('prevYear');
+  const nextBtn = document.getElementById('nextYear');
+  const yLabel = document.getElementById('yearLabel');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', async () => {
+      currentYear--;
+      if (yLabel) yLabel.textContent = currentYear;
+      await loadYear(currentYear);
+      renderYearGrid();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', async () => {
+      currentYear++;
+      if (yLabel) yLabel.textContent = currentYear;
+      await loadYear(currentYear);
+      renderYearGrid();
+    });
+  }
 }
 
 // ---------- Render calendario anual ----------
 function renderYearGrid() {
   const grid = document.getElementById('yearGrid');
+  if (!grid) return;
   grid.innerHTML = '';
   const today = todayISO();
 
@@ -106,7 +127,7 @@ function renderYearGrid() {
     const card = document.createElement('div');
     card.className = 'month-card';
 
-    const firstDow = (new Date(currentYear, m, 1).getDay() + 6) % 7; // lunes=0
+    const firstDow = (new Date(currentYear, m, 1).getDay() + 6) % 7; 
     const daysInMonth = new Date(currentYear, m + 1, 0).getDate();
 
     let html = `<h3>${MESES[m]} ${currentYear}</h3>`;
@@ -140,15 +161,22 @@ function renderYearGrid() {
 
 // ---------- Modal de día ----------
 function setupModals() {
-  document.getElementById('closeDayModal').addEventListener('click', () => toggleOverlay('dayOverlay', false));
-  document.getElementById('dayOverlay').addEventListener('click', (e) => { if (e.target.id === 'dayOverlay') toggleOverlay('dayOverlay', false); });
-  document.getElementById('closeFormModal').addEventListener('click', () => toggleOverlay('formOverlay', false));
-  document.getElementById('formOverlay').addEventListener('click', (e) => { if (e.target.id === 'formOverlay') toggleOverlay('formOverlay', false); });
-  document.getElementById('reservaForm').addEventListener('submit', onSubmitReserva);
+  const closeDay = document.getElementById('closeDayModal');
+  const dayOv = document.getElementById('dayOverlay');
+  const closeForm = document.getElementById('closeFormModal');
+  const formOv = document.getElementById('formOverlay');
+  const form = document.getElementById('reservaForm');
+
+  if (closeDay) closeDay.addEventListener('click', () => toggleOverlay('dayOverlay', false));
+  if (dayOv) dayOv.addEventListener('click', (e) => { if (e.target.id === 'dayOverlay') toggleOverlay('dayOverlay', false); });
+  if (closeForm) closeForm.addEventListener('click', () => toggleOverlay('formOverlay', false));
+  if (formOv) formOv.addEventListener('click', (e) => { if (e.target.id === 'formOverlay') toggleOverlay('formOverlay', false); });
+  if (form) form.addEventListener('submit', onSubmitReserva);
 }
 
 function toggleOverlay(id, show) {
-  document.getElementById(id).classList.toggle('show', show);
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('show', show);
 }
 
 function fmtFecha(iso) {
@@ -160,12 +188,17 @@ function fmtFecha(iso) {
 
 function openDayModal(iso) {
   selectedDate = iso;
-  document.getElementById('dayModalTitle').textContent = fmtFecha(iso);
+  const title = document.getElementById('dayModalTitle');
+  const sub = document.getElementById('dayModalSub');
+  if (title) title.textContent = fmtFecha(iso);
+  
   const isPast = iso < todayISO();
-  document.getElementById('dayModalSub').textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
+  if (sub) sub.textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
 
   const info = reservationsByDate[iso] || { dia: null, noche: null };
   const cont = document.getElementById('turnosContainer');
+  if (!cont) return;
+
   cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
 
   cont.querySelectorAll('[data-action]').forEach(btn => {
@@ -212,24 +245,34 @@ function handleTurnoAction(action, iso, turno, id, unitId) {
 
 // ---------- Formulario de reserva (crear / editar) ----------
 function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
-  document.getElementById('formAlert').innerHTML = '';
-  document.getElementById('reservaForm').reset();
-  document.getElementById('reservaDate').value = date;
-  document.getElementById('reservaTurno').value = turno;
-  document.getElementById('reservaEditId').value = id || '';
-  document.getElementById('formModalSub').textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
-  document.getElementById('submitReservaBtn').textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
+  const alertBox = document.getElementById('formAlert');
+  const form = document.getElementById('reservaForm');
+  const rDate = document.getElementById('reservaDate');
+  const rTurno = document.getElementById('reservaTurno');
+  const rEditId = document.getElementById('reservaEditId');
+  const sub = document.getElementById('formModalSub');
+  const submitBtn = form?.querySelector('button[type="submit"]');
+
+  if (alertBox) alertBox.innerHTML = '';
+  if (form) form.reset();
+  if (rDate) rDate.value = date;
+  if (rTurno) rTurno.value = turno;
+  if (rEditId) rEditId.value = id || '';
+  if (sub) sub.textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
+  if (submitBtn) submitBtn.textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
 
   const unitSel = document.getElementById('unitSelect');
   const pinInput = document.getElementById('unitPinInput');
-  if (mode === 'edit') {
-    unitSel.value = unitId;
-    unitSel.disabled = true;
-    pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
-  } else {
-    unitSel.disabled = false;
-    pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
-    if (currentPinUnit) unitSel.value = currentPinUnit.id;
+  if (unitSel && pinInput) {
+    if (mode === 'edit') {
+      unitSel.value = unitId;
+      unitSel.disabled = true;
+      pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
+    } else {
+      unitSel.disabled = false;
+      pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
+      if (currentPinUnit) unitSel.value = currentPinUnit.id;
+    }
   }
   toggleOverlay('formOverlay', true);
 }
@@ -237,27 +280,40 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
 async function onSubmitReserva(e) {
   e.preventDefault();
 
-  const submitBtn = document.getElementById('submitReservaBtn');
-  // Evitar doble ejecución si ya está procesando
-  if (submitBtn.disabled) return;
+  // Bloqueo estricto inmediato mediante bandera de ejecución
+  if (isSubmittingReservation) return;
+  isSubmittingReservation = true;
 
-  const date = document.getElementById('reservaDate').value;
-  const turno = document.getElementById('reservaTurno').value;
-  const editId = document.getElementById('reservaEditId').value;
-  const unit_pin = document.getElementById('unitPinInput').value.trim();
-  const unit_id = document.getElementById('unitSelect').value;
-  const nombre = document.getElementById('nombreInput').value.trim();
-  const apellido = document.getElementById('apellidoInput').value.trim();
+  const form = e.target;
+  const submitBtn = form.querySelector('button[type="submit"]');
+  const originalBtnText = submitBtn ? submitBtn.textContent : 'Confirmar reserva';
+
+  const date = document.getElementById('reservaDate')?.value;
+  const turno = document.getElementById('reservaTurno')?.value;
+  const editId = document.getElementById('reservaEditId')?.value;
+  const unit_pin = document.getElementById('unitPinInput')?.value.trim();
+  const unit_id = document.getElementById('unitSelect')?.value;
+  const nombre = document.getElementById('nombreInput')?.value.trim();
+  const apellido = document.getElementById('apellidoInput')?.value.trim();
   const alertBox = document.getElementById('formAlert');
-  alertBox.innerHTML = '';
 
-  if (!unit_id) { alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; return; }
-  if (!/^\d{4}$/.test(unit_pin)) { alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; return; }
+  if (alertBox) alertBox.innerHTML = '';
 
-  // Bloquear el botón instantáneamente
-  submitBtn.disabled = true;
-  const originalBtnText = submitBtn.textContent;
-  submitBtn.textContent = 'Guardando...';
+  if (!unit_id) {
+    if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`;
+    isSubmittingReservation = false;
+    return;
+  }
+  if (!/^\d{4}$/.test(unit_pin)) {
+    if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`;
+    isSubmittingReservation = false;
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+  }
 
   try {
     let res, data;
@@ -286,10 +342,15 @@ async function onSubmitReserva(e) {
     renderYearGrid();
     if (currentPinUnit) await loadMisReservas();
   } catch (err) {
-    alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
-    // Restaurar el botón solo si hubo un error real para permitir corregir o reintentar
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalBtnText;
+    if (alertBox) {
+      alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
+    }
+  } finally {
+    isSubmittingReservation = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+    }
   }
 }
 
@@ -343,38 +404,57 @@ async function doCancel(id) {
 
 // ---------- Mis reservas (unidad + PIN) ----------
 function setupPinForm() {
-  document.getElementById('pinForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const unitId = document.getElementById('misUnitSelect').value;
-    const pin = document.getElementById('misPinInput').value.trim();
-    const alertBox = document.getElementById('pinAlert');
-    alertBox.innerHTML = '';
+  const pinForm = document.getElementById('pinForm');
+  const misLockBtn = document.getElementById('misLockBtn');
 
-    if (!unitId) { alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; return; }
+  if (pinForm) {
+    pinForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const unitId = document.getElementById('misUnitSelect')?.value;
+      const pin = document.getElementById('misPinInput')?.value.trim();
+      const alertBox = document.getElementById('pinAlert');
+      if (alertBox) alertBox.innerHTML = '';
 
-    const res = await fetch(`/api/units/${unitId}/verify-pin`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+      if (!unitId) { 
+        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; 
+        return; 
+      }
+
+      const res = await fetch(`/api/units/${unitId}/verify-pin`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
+        return;
+      }
+
+      const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
+      currentPinUnit = { id: unitId, pin };
+      
+      const pinAccCard = document.getElementById('pinAccessCard');
+      const pinUnlWrap = document.getElementById('pinUnlockedWrap');
+      const misUnTitle = document.getElementById('misUnitTitle');
+
+      if (pinAccCard) pinAccCard.style.display = 'none';
+      if (pinUnlWrap) pinUnlWrap.style.display = '';
+      if (misUnTitle) misUnTitle.textContent = unit ? unitLabel(unit) : 'Unidad';
+      await loadMisReservas();
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
-      return;
-    }
+  }
 
-    const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
-    currentPinUnit = { id: unitId, pin };
-    document.getElementById('pinAccessCard').style.display = 'none';
-    document.getElementById('pinUnlockedWrap').style.display = '';
-    document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
-    await loadMisReservas();
-  });
+  if (misLockBtn) {
+    misLockBtn.addEventListener('click', () => {
+      currentPinUnit = null;
+      const pinAccCard = document.getElementById('pinAccessCard');
+      const pinUnlWrap = document.getElementById('pinUnlockedWrap');
+      const misPinInput = document.getElementById('misPinInput');
 
-  document.getElementById('misLockBtn').addEventListener('click', () => {
-    currentPinUnit = null;
-    document.getElementById('pinAccessCard').style.display = '';
-    document.getElementById('pinUnlockedWrap').style.display = 'none';
-    document.getElementById('misPinInput').value = '';
-  });
+      if (pinAccCard) pinAccCard.style.display = '';
+      if (pinUnlWrap) pinUnlWrap.style.display = 'none';
+      if (misPinInput) misPinInput.value = '';
+    });
+  }
 }
 
 async function loadMisReservas() {
@@ -385,6 +465,8 @@ async function loadMisReservas() {
 
 function renderMisReservas(list) {
   const cont = document.getElementById('misReservasList');
+  if (!cont) return;
+
   if (!list.length) {
     cont.innerHTML = `<div class="empty-state"><div class="big">📅</div>Esta unidad todavía no tiene reservas.</div>`;
     return;
