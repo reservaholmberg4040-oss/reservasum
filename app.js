@@ -16,8 +16,14 @@ function toast(msg, type = '') {
   setTimeout(() => el.remove(), 4200);
 }
 
-// Solución definitiva para que muestre bien el piso y el departamento/dto sin undefined
+// Obtener datos reales de la unidad desde la lista cargada para evitar "undefined"
+function getUnitDetails(unitId) {
+  if (!unitId || !units.length) return null;
+  return units.find(u => String(u.unidad || u.id) === String(unitId));
+}
+
 function unitLabel(u) {
+  if (!u) return 'Unidad desconocida';
   const piso = u.piso !== undefined && u.piso !== null ? u.piso : (u.floor || '');
   const dto = u.dto !== undefined && u.dto !== null ? u.dto : (u.departamento || u.letter || '');
   const prop = u.propietario !== undefined && u.propietario !== null ? u.propietario : (u.owner || '');
@@ -36,34 +42,42 @@ let isSubmittingReservation = false;
 
 // ---------- Carga inicial ----------
 async function init() {
-  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-  if (cfg.buildingName) {
-    const bName = document.getElementById('buildingName');
-    if (bName) bName.textContent = cfg.buildingName;
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+    if (cfg.buildingName) {
+      const bName = document.getElementById('buildingName');
+      if (bName) bName.textContent = cfg.buildingName;
+    }
+
+    units = await fetch('/api/units').then(r => r.json());
+    populateUnitSelect('unitSelect');
+    populateUnitSelect('misUnitSelect');
+
+    const yLabel = document.getElementById('yearLabel');
+    if (yLabel) yLabel.textContent = currentYear;
+    
+    await loadYear(currentYear);
+    renderYearGrid();
+
+    setupTabs();
+    setupYearSwitcher();
+    setupModals();
+    setupPinForm();
+  } catch (err) {
+    console.error("Error en la inicialización:", err);
   }
-
-  units = await fetch('/api/units').then(r => r.json());
-  populateUnitSelect('unitSelect');
-  populateUnitSelect('misUnitSelect');
-
-  const yLabel = document.getElementById('yearLabel');
-  if (yLabel) yLabel.textContent = currentYear;
-  
-  await loadYear(currentYear);
-  renderYearGrid();
-
-  setupTabs();
-  setupYearSwitcher();
-  setupModals();
-  setupPinForm();
 }
 
 async function loadYear(year) {
-  const rows = await fetch(`/api/reservations?year=${year}`).then(r => r.json());
-  reservationsByDate = {};
-  for (const r of rows) {
-    if (!reservationsByDate[r.date]) reservationsByDate[r.date] = { dia: null, noche: null };
-    reservationsByDate[r.date][r.turno] = r;
+  try {
+    const rows = await fetch(`/api/reservations?year=${year}`).then(r => r.json());
+    reservationsByDate = {};
+    for (const r of rows) {
+      if (!reservationsByDate[r.date]) reservationsByDate[r.date] = { dia: null, noche: null };
+      reservationsByDate[r.date][r.turno] = r;
+    }
+  } catch (err) {
+    console.error("Error al cargar el año:", err);
   }
 }
 
@@ -217,9 +231,13 @@ function openDayModal(iso) {
 function renderTurnoCard(iso, turno, reserva, isPast) {
   const label = turno === 'dia' ? '☀️ Turno Día' : '🌙 Turno Noche';
   if (reserva) {
-    const pisoVal = reserva.piso !== undefined && reserva.piso !== null ? reserva.piso : (reserva.floor || '');
-    const dtoVal = reserva.dto !== undefined && reserva.dto !== null ? reserva.dto : (reserva.departamento || reserva.letter || '');
+    // Buscamos la unidad real en la lista global para evitar cualquier "undefined"
+    const matchedUnit = getUnitDetails(reserva.unit_id);
+    const pisoVal = matchedUnit ? matchedUnit.piso : (reserva.piso || reserva.floor || '');
+    const dtoVal = matchedUnit ? matchedUnit.dto : (reserva.dto || reserva.departamento || reserva.letter || '');
+    const propVal = matchedUnit ? matchedUnit.propietario : (reserva.propietario || '');
     const unidadLabel = pisoVal === 'PB' ? `PB ${dtoVal}` : `Piso ${pisoVal} ${dtoVal}`;
+
     return `
       <div class="turno-card">
         <div class="turno-head">
@@ -227,7 +245,7 @@ function renderTurnoCard(iso, turno, reserva, isPast) {
           <span class="status-pill ocupado">Ocupado</span>
         </div>
         <div class="turno-info">
-          <b>Unidad:</b> ${unidadLabel.trim()} (${reserva.propietario || ''})<br>
+          <b>Unidad:</b> ${unidadLabel.trim()} (${propVal})<br>
           <b>Reservó:</b> ${reserva.nombre || ''} ${reserva.apellido || ''}
         </div>
         ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
@@ -332,7 +350,7 @@ async function onSubmitReserva(e) {
       });
       data = await res.json();
       if (!res.ok) throw data;
-      toast('Reserva actualizada ✔', 'success');
+      toast('Reserva actualizada con éxito ✔', 'success');
     } else {
       res = await fetch('/api/reservations', {
         method: 'POST',
@@ -345,7 +363,7 @@ async function onSubmitReserva(e) {
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
 
-    // Cerramos ambos modales para evitar que quede superpuesto o congelado
+    // Cerramos ambos modales para evitar bloqueos visuales
     toggleOverlay('formOverlay', false);
     toggleOverlay('dayOverlay', false);
 
@@ -398,7 +416,7 @@ async function doCancel(id) {
         confirmBox.remove();
         return; 
       }
-      toast('Reserva cancelada', 'success');
+      toast('Reserva cancelada con éxito', 'success');
       await loadYear(currentYear);
       renderYearGrid();
       await loadMisReservas();
