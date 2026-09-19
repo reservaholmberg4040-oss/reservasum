@@ -24,11 +24,11 @@ function showLoginForm() {
       <form id="login-form">
         <div style="margin-bottom: 15px;">
           <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #4b5563;">Usuario</label>
-          <input type="text" id="username" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box;">
+          <input type="text" id="username" autocomplete="username" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box;">
         </div>
         <div style="margin-bottom: 20px;">
           <label style="display: block; margin-bottom: 5px; font-size: 14px; color: #4b5563;">Contraseña</label>
-          <input type="password" id="password" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box;">
+          <input type="password" id="password" autocomplete="current-password" required style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box;">
         </div>
         <button type="submit" style="width: 100%; padding: 10px; background: #4f46e5; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Ingresar</button>
         <div id="login-error" style="color: #dc2626; font-size: 13px; margin-top: 10px; text-align: center;"></div>
@@ -41,8 +41,8 @@ function showLoginForm() {
 
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const user = document.getElementById('username').value;
-    const pass = document.getElementById('password').value;
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
 
     try {
       const res = await fetch('/api/admin/login', {
@@ -78,21 +78,23 @@ function initAdminPanel() {
     });
   }
 
-  // --- Botón Descargar PDF optimizado con formato de período seguro ---
+  // --- Botón Descargar PDF optimizado y robusto ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', async () => {
-      const periodInput = document.querySelector('input[type="month"], select, input[type="text"]');
-      let rawValue = periodInput ? periodInput.value : '';
-      
-      let period = '';
-      if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
-        period = rawValue;
-      } else {
-        period = new Date().toISOString().slice(0, 7);
-      }
-
       try {
+        // Buscamos de forma flexible el input de período o asignamos el mes actual en formato YYYY-MM
+        const periodInput = document.querySelector('input[type="month"]') || document.getElementById('report-period') || document.querySelector('.admin-card input');
+        let rawValue = periodInput ? periodInput.value : '';
+        
+        let period = '';
+        if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
+          period = rawValue;
+        } else {
+          const now = new Date();
+          period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
         const res = await fetch(`/api/admin/dashboard?period=${period}`);
         if (!res.ok) throw new Error('No se pudo obtener la información del reporte.');
         const data = await res.json();
@@ -125,8 +127,8 @@ function initAdminPanel() {
             <p style="color: #4b5563; font-size: 14px; margin-top: 0;">Período consultado: <b>${data.period}</b></p>
             
             <div style="display: flex; gap: 30px; margin: 15px 0; font-size: 14px; background: #f9fafb; padding: 10px; border-radius: 6px;">
-              <div><b>Total de Reservas del Mes:</b> ${data.totalReservasMes}</div>
-              <div><b>Unidades Activas:</b> ${data.unidadesActivas}</div>
+              <div><b>Total de Reservas del Mes:</b> ${data.totalReservasMes || 0}</div>
+              <div><b>Unidades Activas:</b> ${data.unidadesActivas || 0}</div>
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
