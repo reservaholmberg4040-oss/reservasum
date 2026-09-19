@@ -1,230 +1,410 @@
-:root {
-  --primary: #4f46e5;
-  --primary-dark: #3730a3;
-  --primary-light: #818cf8;
-  --accent: #06b6d4;
-  --dia: #f59e0b;
-  --dia-bg: #fef3c7;
-  --noche: #4338ca;
-  --noche-bg: #e0e7ff;
-  --libre: #10b981;
-  --libre-bg: #d1fae5;
-  --danger: #ef4444;
-  --danger-bg: #fee2e2;
-  --bg: #f4f5fb;
-  --card: #ffffff;
-  --text: #1f2937;
-  --text-muted: #6b7280;
-  --border: #e5e7eb;
-  --radius: 14px;
-  --shadow: 0 4px 16px rgba(31, 41, 55, 0.06);
-  --shadow-lg: 0 12px 32px rgba(31, 41, 55, 0.14);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+// ---------- Utilidades ----------
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DOW = ['L','M','M','J','V','S','D'];
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toISODate(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+function todayISO() { const t = new Date(); return toISODate(t.getFullYear(), t.getMonth(), t.getDate()); }
+
+function toast(msg, type = '') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 4200);
 }
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
+function unitLabel(u) {
+  return `${u.piso === 'PB' ? 'PB ' + u.dto : 'Piso ' + u.piso + ' ' + u.dto} — ${u.propietario}`;
 }
 
-a { color: inherit; text-decoration: none; }
+// ---------- Estado ----------
+let currentYear = new Date().getFullYear();
+let units = [];
+let reservationsByDate = {}; // { 'YYYY-MM-DD': { dia: reservation|null, noche: reservation|null } }
+let selectedDate = null;
+let currentPinUnit = null; // { id, pin } — unidad "desbloqueada" en la pestaña Mis Reservas
 
-/* ---------- Header ---------- */
-.topbar {
-  background: linear-gradient(120deg, var(--primary-dark), var(--primary) 60%, var(--accent));
-  color: #fff;
-  padding: 22px 28px;
-  box-shadow: var(--shadow);
-  position: sticky;
-  top: 0;
-  z-index: 40;
+// ---------- Carga inicial ----------
+async function init() {
+  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+  if (cfg.buildingName) document.getElementById('buildingName').textContent = cfg.buildingName;
+
+  units = await fetch('/api/units').then(r => r.json());
+  populateUnitSelect('unitSelect');
+  populateUnitSelect('misUnitSelect');
+
+  document.getElementById('yearLabel').textContent = currentYear;
+  await loadYear(currentYear);
+  renderYearGrid();
+
+  setupTabs();
+  setupYearSwitcher();
+  setupModals();
+  setupPinForm();
 }
-.topbar-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+
+async function loadYear(year) {
+  const rows = await fetch(`/api/reservations?year=${year}`).then(r => r.json());
+  reservationsByDate = {};
+  for (const r of rows) {
+    if (!reservationsByDate[r.date]) reservationsByDate[r.date] = { dia: null, noche: null };
+    reservationsByDate[r.date][r.turno] = r;
+  }
 }
-.brand { display: flex; align-items: center; gap: 12px; }
-.brand-icon {
-  width: 44px; height: 44px; border-radius: 12px;
-  background: rgba(255,255,255,0.18);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px;
+
+function populateUnitSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '<option value="">Seleccioná la unidad...</option>' +
+    units.map(u => `<option value="${u.unidad || u.id}">${unitLabel(u)}</option>`).join('');
 }
-.brand-text h1 { margin: 0; font-size: 18px; font-weight: 700; }
-.brand-text p { margin: 0; font-size: 12.5px; opacity: 0.85; }
-.nav-links { display: flex; gap: 8px; align-items: center; }
-.nav-links a, .nav-links button {
-  color: #fff; background: rgba(255,255,255,0.14);
-  border: 1px solid rgba(255,255,255,0.25);
-  padding: 9px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600;
-  cursor: pointer; transition: 0.15s;
+
+// ---------- Tabs ----------
+function setupTabs() {
+  document.querySelectorAll('.nav-links a[data-tab]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      goToTab(a.dataset.tab);
+    });
+  });
 }
-.nav-links a:hover, .nav-links button:hover { background: rgba(255,255,255,0.28); }
-.nav-links a.active { background: #fff; color: var(--primary-dark); }
 
-/* ---------- Layout ---------- */
-.container { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
-
-.page-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 20px; }
-.page-title h2 { margin: 0; font-size: 22px; }
-.page-title p { margin: 4px 0 0; color: var(--text-muted); font-size: 14px; }
-
-.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.dot.dia { background: var(--dia); }
-.dot.noche { background: var(--noche); }
-.dot.libre { background: var(--libre); }
-
-/* ---------- Year switcher ---------- */
-.year-switcher { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 12px; padding: 6px 10px; box-shadow: var(--shadow); }
-.year-switcher button { background: var(--bg); border: none; border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; font-weight: 700; color: var(--primary); }
-.year-switcher span { font-weight: 700; font-size: 16px; min-width: 52px; text-align: center; }
-
-/* ---------- Calendar grid (year) ---------- */
-.year-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 18px;
+function goToTab(tab, preselectUnitId) {
+  document.querySelectorAll('.nav-links a[data-tab]').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
+  document.getElementById('tab-calendario').style.display = tab === 'calendario' ? '' : 'none';
+  document.getElementById('tab-misreservas').style.display = tab === 'misreservas' ? '' : 'none';
+  if (tab === 'misreservas' && preselectUnitId) {
+    document.getElementById('misUnitSelect').value = preselectUnitId;
+    document.getElementById('misPinInput').focus();
+  }
 }
-.month-card {
-  background: var(--card);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 16px;
+
+// ---------- Year switcher ----------
+function setupYearSwitcher() {
+  document.getElementById('prevYear').addEventListener('click', async () => {
+    currentYear--;
+    document.getElementById('yearLabel').textContent = currentYear;
+    await loadYear(currentYear);
+    renderYearGrid();
+  });
+  document.getElementById('nextYear').addEventListener('click', async () => {
+    currentYear++;
+    document.getElementById('yearLabel').textContent = currentYear;
+    await loadYear(currentYear);
+    renderYearGrid();
+  });
 }
-.month-card h3 {
-  margin: 0 0 12px; font-size: 15px; text-transform: capitalize;
-  color: var(--primary-dark); font-weight: 700;
+
+// ---------- Render calendario anual ----------
+function renderYearGrid() {
+  const grid = document.getElementById('yearGrid');
+  grid.innerHTML = '';
+  const today = todayISO();
+
+  for (let m = 0; m < 12; m++) {
+    const card = document.createElement('div');
+    card.className = 'month-card';
+
+    const firstDow = (new Date(currentYear, m, 1).getDay() + 6) % 7; // lunes=0
+    const daysInMonth = new Date(currentYear, m + 1, 0).getDate();
+
+    let html = `<h3>${MESES[m]} ${currentYear}</h3>`;
+    html += `<div class="dow-row">${DOW.map(d => `<span>${d}</span>`).join('')}</div>`;
+    html += `<div class="days-grid">`;
+
+    for (let i = 0; i < firstDow; i++) html += `<div class="day-cell empty"></div>`;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = toISODate(currentYear, m, d);
+      const info = reservationsByDate[iso] || { dia: null, noche: null };
+      const isPast = iso < today;
+      const isToday = iso === today;
+      html += `<div class="day-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" data-date="${iso}">
+        <span class="day-num">${d}</span>
+        <div class="day-marks">
+          <i class="${info.dia ? 'on-dia' : ''}"></i>
+          <i class="${info.noche ? 'on-noche' : ''}"></i>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+    card.innerHTML = html;
+    grid.appendChild(card);
+  }
+
+  grid.querySelectorAll('.day-cell[data-date]').forEach(cell => {
+    cell.addEventListener('click', () => openDayModal(cell.dataset.date));
+  });
 }
-.dow-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 4px; }
-.dow-row span { font-size: 10.5px; text-align: center; color: var(--text-muted); font-weight: 600; }
-.days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
-.day-cell {
-  aspect-ratio: 1;
-  border-radius: 8px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  font-size: 11.5px; font-weight: 600; cursor: pointer; position: relative;
-  border: 1px solid transparent;
-  background: #fafafa;
-  transition: 0.12s;
+
+// ---------- Modal de día ----------
+function setupModals() {
+  document.getElementById('closeDayModal').addEventListener('click', () => toggleOverlay('dayOverlay', false));
+  document.getElementById('dayOverlay').addEventListener('click', (e) => { if (e.target.id === 'dayOverlay') toggleOverlay('dayOverlay', false); });
+  document.getElementById('closeFormModal').addEventListener('click', () => toggleOverlay('formOverlay', false));
+  document.getElementById('formOverlay').addEventListener('click', (e) => { if (e.target.id === 'formOverlay') toggleOverlay('formOverlay', false); });
+  document.getElementById('reservaForm').addEventListener('submit', onSubmitReserva);
 }
-.day-cell:hover { border-color: var(--primary-light); transform: scale(1.06); }
-.day-cell.empty { visibility: hidden; cursor: default; }
-.day-cell.today { box-shadow: inset 0 0 0 2px var(--primary); }
-.day-cell.past { opacity: 0.45; }
-.day-num { line-height: 1; }
-.day-marks { display: flex; gap: 2px; margin-top: 2px; }
-.day-marks i { width: 6px; height: 6px; border-radius: 50%; display: block; background: var(--border); }
-.day-marks i.on-dia { background: var(--dia); }
-.day-marks i.on-noche { background: var(--noche); }
 
-/* ---------- Modal ---------- */
-.overlay {
-  position: fixed; inset: 0; background: rgba(17, 24, 39, 0.55);
-  display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px;
-  backdrop-filter: blur(2px);
+function toggleOverlay(id, show) {
+  document.getElementById(id).classList.toggle('show', show);
 }
-.overlay.show { display: flex; }
-.modal {
-  background: var(--card); border-radius: 18px; width: 100%; max-width: 460px;
-  box-shadow: var(--shadow-lg); padding: 24px; max-height: 90vh; overflow-y: auto;
-  animation: pop .15s ease-out;
+
+function fmtFecha(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  return `${dias[dt.getDay()]} ${d} de ${MESES[m - 1]} ${y}`;
 }
-@keyframes pop { from { transform: scale(.96); opacity: 0 } to { transform: scale(1); opacity: 1 } }
-.modal h3 { margin: 0 0 4px; font-size: 18px; }
-.modal .sub { color: var(--text-muted); font-size: 13px; margin-bottom: 18px; }
-.modal-close { position: absolute; top: 16px; right: 16px; cursor: pointer; background: none; border: none; font-size: 20px; color: var(--text-muted); }
 
-.turno-card {
-  border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px;
+function openDayModal(iso) {
+  selectedDate = iso;
+  document.getElementById('dayModalTitle').textContent = fmtFecha(iso);
+  const isPast = iso < todayISO();
+  document.getElementById('dayModalSub').textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
+
+  const info = reservationsByDate[iso] || { dia: null, noche: null };
+  const cont = document.getElementById('turnosContainer');
+  cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
+
+  cont.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => handleTurnoAction(btn.dataset.action, iso, btn.dataset.turno, btn.dataset.id, btn.dataset.unit));
+  });
+
+  toggleOverlay('dayOverlay', true);
 }
-.turno-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.turno-badge { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
-.turno-badge.dia { background: var(--dia-bg); color: #92400e; }
-.turno-badge.noche { background: var(--noche-bg); color: var(--noche); }
-.status-pill { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
-.status-pill.libre { background: var(--libre-bg); color: #065f46; }
-.status-pill.ocupado { background: var(--danger-bg); color: #991b1b; }
-.turno-info { font-size: 13.5px; color: var(--text); margin-bottom: 8px; }
-.turno-info b { color: var(--text); }
 
-.btn { border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: 13.5px; cursor: pointer; transition: .15s; }
-.btn-primary { background: var(--primary); color: #fff; }
-.btn-primary:hover { background: var(--primary-dark); }
-.btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
-.btn-outline:hover { background: var(--bg); }
-.btn-danger { background: var(--danger-bg); color: #991b1b; }
-.btn-danger:hover { background: #fecaca; }
-.btn-block { width: 100%; }
-.btn-sm { padding: 6px 12px; font-size: 12.5px; }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-
-.form-group { margin-bottom: 14px; }
-.form-group label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 5px; }
-.form-group input, .form-group select {
-  width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border);
-  font-size: 14px; font-family: inherit; background: #fff;
+function renderTurnoCard(iso, turno, reserva, isPast) {
+  const label = turno === 'dia' ? '☀️ Turno Día' : '🌙 Turno Noche';
+  if (reserva) {
+    const unidadLabel = reserva.piso === 'PB' ? `PB ${reserva.dto}` : `Piso ${reserva.piso} ${reserva.dto}`;
+    return `
+      <div class="turno-card">
+        <div class="turno-head">
+          <span class="turno-badge ${turno}">${label}</span>
+          <span class="status-pill ocupado">Ocupado</span>
+        </div>
+        <div class="turno-info">
+          <b>Unidad:</b> ${unidadLabel} (${reserva.propietario})<br>
+          <b>Reservó:</b> ${reserva.nombre} ${reserva.apellido}
+        </div>
+        ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
+      </div>`;
+  }
+  return `
+    <div class="turno-card">
+      <div class="turno-head">
+        <span class="turno-badge ${turno}">${label}</span>
+        <span class="status-pill libre">Libre</span>
+      </div>
+      ${isPast
+        ? `<p class="sub" style="margin:0">Fecha pasada</p>`
+        : `<button class="btn btn-primary btn-block" data-action="new" data-turno="${turno}">Reservar este turno</button>`}
+    </div>`;
 }
-.form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
-.form-row { display: flex; gap: 10px; }
-.form-row .form-group { flex: 1; }
 
-.alert { padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; font-weight: 600; }
-.alert-error { background: var(--danger-bg); color: #991b1b; }
-.alert-success { background: var(--libre-bg); color: #065f46; }
-
-/* ---------- Mis reservas ---------- */
-.mr-list { display: flex; flex-direction: column; gap: 10px; }
-.mr-item {
-  background: var(--card); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
-  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+function handleTurnoAction(action, iso, turno, id, unitId) {
+  toggleOverlay('dayOverlay', false);
+  if (action === 'new') openFormModal({ mode: 'new', date: iso, turno });
+  if (action === 'manage') goToTab('misreservas', unitId);
 }
-.mr-item .info { font-size: 13.5px; }
-.mr-item .info b { display: block; font-size: 14.5px; }
-.mr-actions { display: flex; gap: 8px; }
-.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
-.empty-state .big { font-size: 40px; margin-bottom: 10px; }
 
-/* ---------- Toast ---------- */
-.toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 10px; }
-.toast { background: #111827; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; box-shadow: var(--shadow-lg); animation: slidein .2s ease-out; max-width: 320px; }
-.toast.error { background: #991b1b; }
-.toast.success { background: #065f46; }
-@keyframes slidein { from { transform: translateX(30px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
+// ---------- Formulario de reserva (crear / editar) ----------
+function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
+  document.getElementById('formAlert').innerHTML = '';
+  document.getElementById('reservaForm').reset();
+  document.getElementById('reservaDate').value = date;
+  document.getElementById('reservaTurno').value = turno;
+  document.getElementById('reservaEditId').value = id || '';
+  document.getElementById('formModalSub').textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
+  document.getElementById('submitReservaBtn').textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
 
-/* ---------- Admin ---------- */
-.login-wrap { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
-.login-card { background: var(--card); border-radius: 18px; box-shadow: var(--shadow-lg); padding: 36px; width: 100%; max-width: 380px; }
-.login-card h2 { margin-top: 0; }
-
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.stat-card { background: var(--card); border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow); }
-.stat-card .label { font-size: 12.5px; color: var(--text-muted); font-weight: 600; }
-.stat-card .value { font-size: 26px; font-weight: 800; color: var(--primary-dark); margin-top: 4px; }
-
-.table-card { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 20px; overflow-x: auto; margin-bottom: 24px; }
-.table-card h3 { margin-top: 0; }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-th { color: var(--text-muted); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
-tr:hover td { background: #fafaff; }
-
-.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
-.toolbar select, .toolbar input { padding: 9px 12px; border-radius: 9px; border: 1px solid var(--border); font-size: 13.5px; }
-
-@media (max-width: 640px) {
-  .topbar { padding: 16px; }
-  .nav-links { width: 100%; justify-content: flex-start; }
-  .year-grid { grid-template-columns: 1fr; }
+  const unitSel = document.getElementById('unitSelect');
+  const pinInput = document.getElementById('unitPinInput');
+  if (mode === 'edit') {
+    unitSel.value = unitId;
+    unitSel.disabled = true;
+    pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
+  } else {
+    unitSel.disabled = false;
+    pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
+    if (currentPinUnit) unitSel.value = currentPinUnit.id;
+  }
+  toggleOverlay('formOverlay', true);
 }
+
+async function onSubmitReserva(e) {
+  e.preventDefault();
+  const date = document.getElementById('reservaDate').value;
+  const turno = document.getElementById('reservaTurno').value;
+  const editId = document.getElementById('reservaEditId').value;
+  const unit_pin = document.getElementById('unitPinInput').value.trim();
+  const unit_id = document.getElementById('unitSelect').value;
+  const nombre = document.getElementById('nombreInput').value.trim();
+  const apellido = document.getElementById('apellidoInput').value.trim();
+  const alertBox = document.getElementById('formAlert');
+  const submitBtn = document.getElementById('submitReservaBtn');
+  alertBox.innerHTML = '';
+
+  if (!unit_id) { alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; return; }
+  if (!/^\d{4}$/.test(unit_pin)) { alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; return; }
+
+  // Deshabilitar botón para evitar doble clic o peticiones duplicadas
+  submitBtn.disabled = true;
+  const originalBtnText = submitBtn.textContent;
+  submitBtn.textContent = 'Guardando...';
+
+  try {
+    let res, data;
+    if (editId) {
+      res = await fetch(`/api/reservations/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_pin, date, turno, nombre, apellido })
+      });
+      data = await res.json();
+      if (!res.ok) throw data;
+      toast('Reserva actualizada ✔', 'success');
+    } else {
+      res = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, turno, unit_id, nombre, apellido, unit_pin })
+      });
+      data = await res.json();
+      if (!res.ok) throw data;
+      toast('¡Turno reservado con éxito! 🎉', 'success');
+      currentPinUnit = { id: unit_id, pin: unit_pin };
+    }
+    toggleOverlay('formOverlay', false);
+    await loadYear(currentYear);
+    renderYearGrid();
+    if (currentPinUnit) await loadMisReservas();
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalBtnText;
+  }
+}
+
+async function doCancel(id) {
+  const itemElement = document.querySelector(`[data-cancel="${id}"]`)?.closest('.mr-item');
+  if (!itemElement) return;
+
+  if (itemElement.querySelector('.confirm-box')) return;
+
+  const confirmBox = document.createElement('div');
+  confirmBox.className = 'confirm-box';
+  confirmBox.style.cssText = 'margin-top: 10px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;';
+  confirmBox.innerHTML = `
+    <span style="font-size: 0.9rem; color: #ef4444; font-weight: 500;">¿Seguro que querés cancelar esta reserva?</span>
+    <div style="display: flex; gap: 6px;">
+      <button class="btn btn-danger btn-sm confirm-yes" style="padding: 4px 10px;">Sí, cancelar</button>
+      <button class="btn btn-outline btn-sm confirm-no" style="padding: 4px 10px;">No</button>
+    </div>
+  `;
+
+  itemElement.appendChild(confirmBox);
+
+  confirmBox.querySelector('.confirm-yes').addEventListener('click', async () => {
+    confirmBox.innerHTML = `<span style="font-size: 0.9rem; color: #666;">Cancelando...</span>`;
+    try {
+      const res = await fetch(`/api/reservations/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unit_pin: currentPinUnit ? currentPinUnit.pin : '' })
+      });
+      const data = await res.json();
+      if (!res.ok) { 
+        toast(data.error || 'No se pudo cancelar', 'error'); 
+        confirmBox.remove();
+        return; 
+      }
+      toast('Reserva cancelada', 'success');
+      await loadYear(currentYear);
+      renderYearGrid();
+      await loadMisReservas();
+    } catch (err) {
+      toast('Error al procesar la cancelación', 'error');
+      confirmBox.remove();
+    }
+  });
+
+  confirmBox.querySelector('.confirm-no').addEventListener('click', () => {
+    confirmBox.remove();
+  });
+}
+
+// ---------- Mis reservas (unidad + PIN) ----------
+function setupPinForm() {
+  document.getElementById('pinForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const unitId = document.getElementById('misUnitSelect').value;
+    const pin = document.getElementById('misPinInput').value.trim();
+    const alertBox = document.getElementById('pinAlert');
+    alertBox.innerHTML = '';
+
+    if (!unitId) { alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; return; }
+
+    const res = await fetch(`/api/units/${unitId}/verify-pin`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
+      return;
+    }
+
+    const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
+    currentPinUnit = { id: unitId, pin };
+    document.getElementById('pinAccessCard').style.display = 'none';
+    document.getElementById('pinUnlockedWrap').style.display = '';
+    document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
+    await loadMisReservas();
+  });
+
+  document.getElementById('misLockBtn').addEventListener('click', () => {
+    currentPinUnit = null;
+    document.getElementById('pinAccessCard').style.display = '';
+    document.getElementById('pinUnlockedWrap').style.display = 'none';
+    document.getElementById('misPinInput').value = '';
+  });
+}
+
+async function loadMisReservas() {
+  if (!currentPinUnit) return;
+  const list = await fetch(`/api/reservations?unit_id=${currentPinUnit.id}`).then(r => r.json());
+  renderMisReservas(list.sort((a, b) => a.date.localeCompare(b.date)));
+}
+
+function renderMisReservas(list) {
+  const cont = document.getElementById('misReservasList');
+  if (!list.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="big">📅</div>Esta unidad todavía no tiene reservas.</div>`;
+    return;
+  }
+  cont.innerHTML = list.map(r => {
+    const isPast = r.date < todayISO();
+    return `
+    <div class="mr-item">
+      <div class="info">
+        <b>${fmtFecha(r.date)} — ${r.turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}</b>
+        ${r.nombre} ${r.apellido}
+      </div>
+      <div class="mr-actions">
+        ${!isPast ? `
+          <button class="btn btn-outline btn-sm" data-edit="${r.id}" data-unit="${r.unit_id}" data-date="${r.date}" data-turno="${r.turno}">Editar</button>
+          <button class="btn btn-danger btn-sm" data-cancel="${r.id}">Cancelar</button>` : `<span class="sub">Pasada</span>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  cont.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
+    openFormModal({ mode: 'edit', date: b.dataset.date, turno: b.dataset.turno, id: b.dataset.edit, unitId: b.dataset.unit, unitPin: currentPinUnit.pin });
+  }));
+  cont.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', () => doCancel(b.dataset.cancel)));
+}
+
+init();
