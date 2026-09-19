@@ -4,14 +4,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const checkRes = await fetch('/api/admin/dashboard');
     if (checkRes.status === 401) {
       showLoginForm();
-      return; // Detenemos la ejecución si no está logueado
+      return;
     }
   } catch (e) {
     showLoginForm();
     return;
   }
 
-  // 2. Si está logueado, inicializamos todo el panel normalmente
+  // 2. Si está logueado, inicializamos todo el panel
   initAdminPanel();
 });
 
@@ -51,7 +51,7 @@ function showLoginForm() {
         body: JSON.stringify({ username: user, password: pass })
       });
       if (res.ok) {
-        window.location.reload(); // Recarga para mostrar el panel completo
+        window.location.reload();
       } else {
         document.getElementById('login-error').innerText = 'Usuario o contraseña incorrectos';
       }
@@ -61,40 +61,57 @@ function showLoginForm() {
   });
 }
 
-// 3. Todo tu código original del panel de administración agrupado aquí
 function initAdminPanel() {
   loadUnits();
   loadReportLog();
+
+  // Inicializar el input de mes con el período actual (YYYY-MM) si está vacío
+  const monthSelect = document.getElementById('month-select');
+  if (monthSelect && !monthSelect.value) {
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    monthSelect.value = currentPeriod;
+  }
 
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
         await fetch('/api/admin/logout', { method: 'POST' });
-      } catch (err) {
-        // Ignoramos error de red para forzar la redirección de todos modos
-      }
+      } catch (err) {}
       window.location.href = '/admin';
     });
   }
 
-  // --- Botón Descarga de Excel (Corregido y robusto para capturar el período) ---
+  // --- BOTÓN DESCARGAR EXCEL (Solución definitiva para tomar el período seleccionado) ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', () => {
-      // Buscamos dinámicamente cualquier selector de mes o input de tipo month en la interfaz
-      const periodInput = document.querySelector('input[type="month"]') || document.getElementById('month-select') || document.getElementById('periodSelect');
-      let rawValue = periodInput ? periodInput.value : '';
+      const periodVal = monthSelect ? monthSelect.value : '';
       
       let period = '';
-      if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
-        period = rawValue;
+      if (periodVal && /^\d{4}-\d{2}$/.test(periodVal)) {
+        period = periodVal;
       } else {
         const now = new Date();
         period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
 
+      // Redirige correctamente pasando el período como parámetro GET al backend
       window.location.href = `/api/admin/download-report?period=${period}`;
+    });
+  }
+
+  // Manejo del formulario de envío de reporte por correo (si está implementado)
+  const reportForm = document.getElementById('report-form');
+  if (reportForm) {
+    reportForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const period = monthSelect ? monthSelect.value : '';
+      const recipient = document.getElementById('recipient-email')?.value || '';
+      
+      alert(`Funcionalidad de envío por mail seleccionada para el período ${period} a ${recipient}.`);
+      // Acá podés integrar tu lógica de fetch para enviar el reporte por mail si corresponde.
     });
   }
 
@@ -259,7 +276,6 @@ function initAdminPanel() {
   }
 }
 
-// Mensaje dinámico elegante en el modal
 function showModalFeedback(text, type) {
   let feedbackEl = document.getElementById('modal-feedback-alert');
   const form = document.getElementById('add-unit-form');
@@ -298,7 +314,6 @@ function clearModalFeedback() {
   }
 }
 
-// Cargar tabla con campos editables Inline y Checkbox de BAJA
 async function loadUnits() {
   const tbody = document.getElementById('units-tbody');
   if (!tbody) return;
@@ -319,7 +334,6 @@ async function loadUnits() {
       const tr = document.createElement('tr');
       const unitId = u.id || u.unidad;
       const pisoDtoStr = u.piso && u.depto ? `${u.piso} ${u.depto}` : (u.piso || u.depto || '-');
-
       const isBaja = u.baja === true;
 
       tr.innerHTML = `
@@ -361,7 +375,6 @@ async function loadUnits() {
   }
 }
 
-// Edición en tiempo real
 window.updatePin = async (unitId, newPin) => {
   if (!/^\d{4}$/.test(newPin)) {
     alert('El PIN debe tener exactamente 4 dígitos numéricos.');
@@ -442,7 +455,6 @@ async function updateUnitBaja(unitId, isBaja) {
       alert('Error: ' + (err.error || 'No se pudo actualizar el estado de la unidad.'));
     }
   } catch (err) {
-    console.error('Error de conexión:', err);
     const cb = document.querySelector(`.unit-baja-checkbox[data-unit-id="${unitId}"]`);
     if (cb) cb.checked = !isBaja;
     alert('Error al conectar con el servidor.');
