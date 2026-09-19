@@ -179,7 +179,7 @@ function renderYearGrid() {
   });
 }
 
-// ---------- Modal de día ----------
+// ---------- Modales ----------
 function setupModals() {
   const closeDay = document.getElementById('closeDayModal');
   const dayOv = document.getElementById('dayOverlay');
@@ -231,7 +231,6 @@ function openDayModal(iso) {
 function renderTurnoCard(iso, turno, reserva, isPast) {
   const label = turno === 'dia' ? '☀️ Turno Día' : '🌙 Turno Noche';
   if (reserva) {
-    // Buscamos la unidad real en la lista global para evitar cualquier "undefined"
     const matchedUnit = getUnitDetails(reserva.unit_id);
     const pisoVal = matchedUnit ? matchedUnit.piso : (reserva.piso || reserva.floor || '');
     const dtoVal = matchedUnit ? matchedUnit.dto : (reserva.dto || reserva.departamento || reserva.letter || '');
@@ -269,7 +268,7 @@ function handleTurnoAction(action, iso, turno, id, unitId) {
   if (action === 'manage') goToTab('misreservas', unitId);
 }
 
-// ---------- Formulario de reserva (crear / editar) ----------
+// ---------- Formulario de reserva ----------
 function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
   const alertBox = document.getElementById('formAlert');
   const form = document.getElementById('reservaForm');
@@ -277,7 +276,7 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
   const rTurno = document.getElementById('reservaTurno');
   const rEditId = document.getElementById('reservaEditId');
   const sub = document.getElementById('formModalSub');
-  const submitBtn = form?.querySelector('button[type="submit"]');
+  const submitBtn = document.getElementById('submitReservaBtn');
 
   if (alertBox) alertBox.innerHTML = '';
   if (form) form.reset();
@@ -309,8 +308,7 @@ async function onSubmitReserva(e) {
   if (isSubmittingReservation) return;
   isSubmittingReservation = true;
 
-  const form = e.target;
-  const submitBtn = form.querySelector('button[type="submit"]');
+  const submitBtn = document.getElementById('submitReservaBtn');
   const originalBtnText = submitBtn ? submitBtn.textContent : 'Confirmar reserva';
 
   const date = document.getElementById('reservaDate')?.value;
@@ -363,7 +361,7 @@ async function onSubmitReserva(e) {
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
 
-    // Cerramos ambos modales para evitar bloqueos visuales
+    // Cerramos ambos modales para liberar la pantalla
     toggleOverlay('formOverlay', false);
     toggleOverlay('dayOverlay', false);
 
@@ -431,7 +429,7 @@ async function doCancel(id) {
   });
 }
 
-// ---------- Mis reservas (unidad + PIN) ----------
+// ---------- Mis reservas ----------
 function setupPinForm() {
   const pinForm = document.getElementById('pinForm');
   const misLockBtn = document.getElementById('misLockBtn');
