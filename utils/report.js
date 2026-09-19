@@ -2,67 +2,59 @@ const XLSX = require('xlsx');
 const db = require('../db');
 
 /**
- * Genera un informe mensual normalizando inteligentemente cualquier formato de período.
- * @param {string} period
+ * Genera el informe mensual de reservas buscando de forma flexible y robusta.
+ * @param {string} period - El período a consultar en formato YYYY-MM (ej: "2026-09")
  */
 function buildMonthlyReport(period) {
-  let targetYear = '';
-  let targetMonth = '';
-
-  // Normalizamos el período ingresado (soporta "9-2026", "2026-09", "09/2026", etc.)
-  if (period) {
-    const cleanStr = String(period).trim();
-    const parts = cleanStr.split(/[-/]/);
-    if (parts.length === 2) {
-      if (parts[0].length === 4) {
-        targetYear = parts[0];
-        targetMonth = parts[1].padStart(2, '0');
-      } else if (parts[1].length === 4) {
-        targetYear = parts[1];
-        targetMonth = parts[0].padStart(2, '0');
-      }
-    }
-  }
-
-  // Si no se pudo interpretar, usamos el mes y año actual por defecto
-  const now = new Date();
-  const currentYear = String(now.getFullYear());
-  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-
-  const finalYear = targetYear || currentYear;
-  const finalMonth = targetMonth || currentMonth;
-  const normalizedPeriod = `${finalYear}-${finalMonth}`;
-
   let allRows = [];
   try {
+    // 1. Intentamos obtener todas las reservas de la base de datos
     let rawAll = [];
     if (db.reservations && typeof db.reservations.all === 'function') {
       rawAll = db.reservations.all();
-    } else if (db.reservations && typeof db.reservations.byPeriod === 'function') {
-      rawAll = db.reservations.byPeriod(normalizedPeriod);
     }
 
-    if (!Array.isArray(rawAll) && rawAll) {
-      rawAll = Object.values(rawAll);
+    // 2. Aseguramos que sea un arreglo plano
+    if (!Array.isArray(rawAll)) {
+      if (typeof rawAll === 'object' && rawAll !== null) {
+        rawAll = Object.values(rawAll); // Convierte objetos tipo {0: {...}, 1: {...}} en array
+      } else {
+        rawAll = [];
+      }
     }
 
-    // Filtramos flexiblemente buscando coincidencia del año y mes
-    allRows = (Array.isArray(rawAll) ? rawAll : []).filter(r => {
+    // 3. Filtramos manualmente por el período (YYYY-MM) de forma flexible
+    allRows = rawAll.filter(r => {
       if (!r) return false;
-      const fechaStr = String(r.date || r.fecha || r.day || r.created_at || '');
-      return fechaStr.includes(`${finalYear}-${finalMonth}`) || 
-             fechaStr.includes(`${finalMonth}/${finalYear}`) ||
-             fechaStr.startsWith(normalizedPeriod);
+      
+      // Buscamos en todas las propiedades posibles donde la fecha pueda estar guardada
+      const possibleDateKeys = ['date', 'fecha', 'day', 'created_at', 'start_time', 'startTime'];
+      let fechaEncontrada = null;
+
+      for (const key of possibleDateKeys) {
+        if (r[key]) {
+          fechaEncontrada = String(r[key]);
+          break;
+        }
+      }
+
+      // Si encontramos una fecha, verificamos si pertenece al período
+      if (fechaEncontrada) {
+        return fechaEncontrada.startsWith(period) || fechaEncontrada.includes(period);
+      }
+      
+      return false; // Si no tiene fecha, no entra en el informe
     });
 
   } catch (e) {
-    console.error('Error al obtener reservas para el reporte:', e);
+    console.error('Error crítico al obtener reservas para el reporte:', e);
     allRows = [];
   }
 
+  // El resto de la lógica para armar el Excel permanece igual
   const totalsMap = {};
   for (const r of allRows) {
-    const key = r.unidad || r.unit || r.piso || 'S/N';
+    const key = r.unidad || r.unit || 'S/N';
     if (!totalsMap[key]) {
       totalsMap[key] = { 
         unidad: r.unidad || r.unit || 'S/N', 
@@ -75,7 +67,7 @@ function buildMonthlyReport(period) {
         fechas: [] 
       };
     }
-    const turno = String(r.turno || r.shift || '').toLowerCase();
+    const turno = String(r.turno || '').toLowerCase();
     if (turno.includes('dia') || turno === 'd') {
       totalsMap[key].turnos_dia++;
     } else {
@@ -91,16 +83,25 @@ function buildMonthlyReport(period) {
     .map(t => ({ ...t, fechas: t.fechas.sort() }))
     .sort((a, b) => String(a.unidad).localeCompare(String(b.unidad)));
 
-  const detailSheetData = allRows.map(r => ({
-    Fecha: r.date || r.fecha || '',
-    Turno: String(r.turno || '').toLowerCase().includes('dia') ? 'Día' : 'Noche',
-    Unidad: r.unidad || r.unit || '',
-    Piso: r.piso || '',
-    Dto: r.dto || '',
-    Propietario: r.propietario || '',
-    'Reservado por': `${r.nombre || r.name || ''} ${r.apellido || r.surname || ''}`.trim(),
-    'Fecha de reserva': r.created_at || ''
-  }));
+  const detailSheetData = allRows.map(r => {
+    // Obtener la fecha y el nombre de usuario de forma segura
+    let fechaStr = '';
+    const possibleDateKeys = ['date', 'fecha', 'day', 'created_at'];
+    for (const key of possibleDateKeys) { if(r[key]) { fechaStr = r[key]; break; } }
+    
+    const usuarioStr = `${r.nombre || r.name || ''} ${r.apellido || r.surname || ''}`.trim();
+
+    return {
+      Fecha: fechaStr,
+      Turno: String(r.turno || '').toLowerCase().includes('dia') ? 'Día' : 'Noche',
+      Unidad: r.unidad || r.unit || '',
+      Piso: r.piso || '',
+      Dto: r.dto || '',
+      Propietario: r.propietario || '',
+      'Reservado por': usuarioStr,
+      'Detalles de reserva': r.detalle || r.reservo || ''
+    };
+  });
 
   const summarySheetData = totalsByUnit.map(t => ({
     Unidad: t.unidad,
@@ -116,8 +117,8 @@ function buildMonthlyReport(period) {
   let buffer = null;
   try {
     const wb = XLSX.utils.book_new();
-    const wsSummary = XLSX.utils.json_to_sheet(summarySheetData.length > 0 ? summarySheetData : [{ Mensaje: 'Sin datos' }]);
-    const wsDetail = XLSX.utils.json_to_sheet(detailSheetData.length > 0 ? detailSheetData : [{ Mensaje: 'Sin datos' }]);
+    const wsSummary = XLSX.utils.json_to_sheet(summarySheetData.length > 0 ? summarySheetData : [{ Mensaje: 'Sin datos registrados para el período.' }]);
+    const wsDetail = XLSX.utils.json_to_sheet(detailSheetData.length > 0 ? detailSheetData : [{ Mensaje: 'Sin datos registrados para el período.' }]);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen por Unidad');
     XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle de Reservas');
     buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -125,7 +126,7 @@ function buildMonthlyReport(period) {
     console.error('Error generando Excel:', e);
   }
 
-  const filename = `informe-reservas-SUM-Holmberg4040-${normalizedPeriod}.xlsx`;
+  const filename = `informe-reservas-SUM-Holmberg4040-${period}.xlsx`;
   return { buffer, filename, rows: allRows, totalsByUnit };
 }
 
