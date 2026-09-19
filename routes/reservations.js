@@ -65,7 +65,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/reservations — Crear reserva con validación estricta y segura
+// POST /api/reservations — Crear reserva de forma inmediata y enviar mail en segundo plano
 router.post('/', async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -116,7 +116,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
-    // Normalizamos de forma segura las propiedades de la unidad para evitar "undefined"
     const deptoVal = targetUnit.depto || targetUnit.dto || '';
 
     const newReservation = {
@@ -124,7 +123,7 @@ router.post('/', async (req, res) => {
       unit_id: String(targetUnit.unidad || targetUnit.id),
       piso: String(targetUnit.piso || ''),
       depto: String(deptoVal),
-      dto: String(deptoVal), // Guardamos ambos para compatibilidad total con cualquier vista
+      dto: String(deptoVal), // Compatibilidad
       propietario: String(targetUnit.propietario || ''),
       nombre: String(nombre || '').trim(),
       apellido: String(apellido || '').trim(),
@@ -136,26 +135,31 @@ router.post('/', async (req, res) => {
     reservations.push(newReservation);
     writeReservations(reservations);
 
-    // Enviar correo electrónico de confirmación si tiene mail válido
-    if (targetUnit.email && targetUnit.email.includes('@')) {
-      try {
-        await sendReservationConfirmation(targetUnit.email, {
-          date,
-          turno,
-          unidad: targetUnit.unidad || targetUnit.id,
-          piso: targetUnit.piso,
-          dto: deptoVal,
-          propietario: targetUnit.propietario
-        });
-      } catch (mailErr) {
-        console.error('[WARNING] No se pudo enviar el correo de confirmación:', mailErr.message);
-      }
-    }
-
+    // Responder inmediatamente al navegador para evitar demoras visuales
     res.json({ ok: true, success: true, reservation: newReservation });
+
+    // Enviar correo electrónico en segundo plano de forma no bloqueante
+    if (targetUnit.email && targetUnit.email.includes('@')) {
+      setImmediate(async () => {
+        try {
+          await sendReservationConfirmation(targetUnit.email, {
+            date,
+            turno,
+            unidad: targetUnit.unidad || targetUnit.id,
+            piso: targetUnit.piso,
+            dto: deptoVal,
+            propietario: targetUnit.propietario
+          });
+        } catch (mailErr) {
+          console.error('[WARNING] No se pudo enviar el correo en segundo plano:', mailErr.message);
+        }
+      });
+    }
   } catch (err) {
     console.error("Error crítico en POST /api/reservations:", err);
-    res.status(500).json({ error: 'Error interno al registrar la reserva.' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error interno al registrar la reserva.' });
+    }
   }
 });
 
@@ -184,7 +188,6 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
     }
 
-    // Verificar si el nuevo turno o fecha ya está ocupado por otra reserva
     if (date && turno && (date !== currentRes.date || turno !== currentRes.turno)) {
       const occupied = reservations.some(r => {
         if (!r || String(r.id) === String(id)) return false;
@@ -224,7 +227,6 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
-    // Validar PIN de la unidad propietaria de la reserva si se provee
     if (unit_pin) {
       const units = db.units.all();
       const targetUnit = units.find(u => String(u.unidad || u.id) === String(reservation.unit_id));
