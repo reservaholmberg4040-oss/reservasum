@@ -45,7 +45,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// Crear reserva (con validación estricta de PIN)
+// Crear reserva (con validación de BAJA y PIN estricto)
 router.post('/', (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -68,6 +68,11 @@ router.post('/', (req, res) => {
 
     if (!targetUnit) {
       return res.status(400).json({ error: 'Unidad no encontrada.' });
+    }
+
+    // --- NUEVA VALIDACIÓN: Verificar si la unidad está dada de baja ---
+    if (targetUnit.baja === true) {
+      return res.status(400).json({ error: 'Esta unidad se encuentra dada de baja y no puede realizar reservas.' });
     }
 
     // Validación estricta: el PIN es obligatorio y debe coincidir exactamente
