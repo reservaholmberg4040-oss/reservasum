@@ -236,6 +236,11 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
 
 async function onSubmitReserva(e) {
   e.preventDefault();
+
+  const submitBtn = document.getElementById('submitReservaBtn');
+  // Evitar doble ejecución si ya está procesando
+  if (submitBtn.disabled) return;
+
   const date = document.getElementById('reservaDate').value;
   const turno = document.getElementById('reservaTurno').value;
   const editId = document.getElementById('reservaEditId').value;
@@ -244,13 +249,12 @@ async function onSubmitReserva(e) {
   const nombre = document.getElementById('nombreInput').value.trim();
   const apellido = document.getElementById('apellidoInput').value.trim();
   const alertBox = document.getElementById('formAlert');
-  const submitBtn = document.getElementById('submitReservaBtn');
   alertBox.innerHTML = '';
 
   if (!unit_id) { alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; return; }
   if (!/^\d{4}$/.test(unit_pin)) { alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; return; }
 
-  // Deshabilitar botón para evitar doble clic o peticiones duplicadas
+  // Bloquear el botón instantáneamente
   submitBtn.disabled = true;
   const originalBtnText = submitBtn.textContent;
   submitBtn.textContent = 'Guardando...';
@@ -283,7 +287,7 @@ async function onSubmitReserva(e) {
     if (currentPinUnit) await loadMisReservas();
   } catch (err) {
     alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
-  } finally {
+    // Restaurar el botón solo si hubo un error real para permitir corregir o reintentar
     submitBtn.disabled = false;
     submitBtn.textContent = originalBtnText;
   }
