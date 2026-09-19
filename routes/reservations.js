@@ -1,35 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
+const db = require('../db'); // Usamos la misma instancia centralizada de la base de datos
 const { sendReservationConfirmation } = require('../utils/mailer');
-
-const dbFile = path.join(__dirname, '../data/reservations.json');
-const unitsFile = path.join(__dirname, '../data/units.json');
-
-function readData(filePath, defaultVal) {
-  try {
-    if (!fs.existsSync(filePath)) return defaultVal;
-    const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data);
-  } catch (err) {
-    console.error(`Error reading ${filePath}:`, err);
-    return defaultVal;
-  }
-}
-
-function writeData(filePath, data) {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  } catch (err) {
-    console.error(`Error writing ${filePath}:`, err);
-  }
-}
 
 // GET /api/reservations
 router.get('/', (req, res) => {
-  const reservations = readData(dbFile, []);
-  res.json(reservations);
+  try {
+    const reservations = db.reservations.all();
+    res.json(reservations);
+  } catch (err) {
+    console.error('Error al obtener reservas:', err);
+    res.status(500).json({ error: 'Error al obtener las reservas.' });
+  }
 });
 
 // POST /api/reservations — Crear reserva y enviar mail automático
@@ -44,7 +26,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
-    const units = readData(unitsFile, []);
+    const units = db.units.all();
     const targetUnit = Array.isArray(units) ? units.find(u => {
       if (!u) return false;
       const uId = String(u.id || '').trim();
@@ -68,10 +50,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El PIN de la unidad es incorrecto o está vacío.' });
     }
 
-    let reservations = readData(dbFile, []);
-    if (!Array.isArray(reservations)) reservations = [];
+    const reservations = db.reservations.all() || [];
 
-    const occupied = reservations.some(r => r && r.date === date && r.turno === turno);
+    // Validamos si el turno ya está ocupado para esa fecha y turno exactos
+    const occupied = reservations.some(r => r && String(r.date).trim() === String(date).trim() && String(r.turno).trim() === String(turno).trim());
     if (occupied) {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
@@ -80,7 +62,7 @@ router.post('/', async (req, res) => {
       id: Date.now().toString(),
       unit_id: targetUnit.unidad || targetUnit.id,
       piso: targetUnit.piso || '',
-      dto: targetUnit.dto || '',
+      depto: targetUnit.depto || targetUnit.dto || '',
       propietario: targetUnit.propietario || '',
       nombre: nombre || '',
       apellido: apellido || '',
@@ -89,8 +71,7 @@ router.post('/', async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    reservations.push(newReservation);
-    writeData(dbFile, reservations);
+    db.reservations.add(newReservation);
 
     // Enviar correo electrónico de confirmación si tiene mail válido
     if (targetUnit.email && targetUnit.email.includes('@')) {
@@ -100,7 +81,7 @@ router.post('/', async (req, res) => {
           turno,
           unidad: targetUnit.unidad || targetUnit.id,
           piso: targetUnit.piso,
-          dto: targetUnit.dto,
+          dto: targetUnit.depto || targetUnit.dto,
           propietario: targetUnit.propietario
         });
       } catch (mailErr) {
@@ -119,17 +100,19 @@ router.post('/', async (req, res) => {
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
-    let reservations = readData(dbFile, []);
+    let reservations = db.reservations.all() || [];
     const initialLength = reservations.length;
-    reservations = reservations.filter(r => String(r.id) !== String(id));
     
-    if (reservations.length === initialLength) {
+    const filtered = reservations.filter(r => String(r.id) !== String(id));
+    
+    if (filtered.length === initialLength) {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
-    writeData(dbFile, reservations);
+    db.reservations.saveAll(filtered);
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
   } catch (err) {
+    console.error('Error al eliminar reserva:', err);
     res.status(500).json({ error: 'Error al eliminar la reserva.' });
   }
 });
