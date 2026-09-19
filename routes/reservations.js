@@ -39,7 +39,7 @@ function normalizeStr(str) {
     .trim();
 }
 
-// GET /api/reservations — Soporta filtros por ?year=YYYY y ?unit_id=X
+// GET /api/reservations — Soporta filtros exactos por ?year=YYYY y ?unit_id=X
 router.get('/', (req, res) => {
   try {
     let reservations = readReservations();
@@ -50,11 +50,11 @@ router.get('/', (req, res) => {
     }
 
     if (unit_id) {
+      const target = String(unit_id).trim();
       reservations = reservations.filter(r => {
         if (!r) return false;
         const rUnit = String(r.unit_id || '').trim();
-        const target = String(unit_id).trim();
-        return rUnit === target || target.includes(rUnit) || rUnit.includes(target);
+        return rUnit === target;
       });
     }
 
@@ -65,7 +65,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/reservations — Crear reserva y enviar mail automático
+// POST /api/reservations — Crear reserva con validación estricta y segura
 router.post('/', async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -83,7 +83,7 @@ router.post('/', async (req, res) => {
       const uId = String(u.id || '').trim();
       const uUnidad = String(u.unidad || '').trim();
       const target = String(unit_id).trim();
-      return uId === target || uUnidad === target || target.includes(uUnidad) || uUnidad.includes(target);
+      return uId === target || uUnidad === target;
     }) : null;
 
     if (!targetUnit) {
@@ -116,14 +116,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
+    // Normalizamos de forma segura las propiedades de la unidad para evitar "undefined"
+    const deptoVal = targetUnit.depto || targetUnit.dto || '';
+
     const newReservation = {
       id: Date.now().toString(),
-      unit_id: targetUnit.unidad || targetUnit.id,
-      piso: targetUnit.piso || '',
-      depto: targetUnit.depto || targetUnit.dto || '',
-      propietario: targetUnit.propietario || '',
-      nombre: nombre || '',
-      apellido: apellido || '',
+      unit_id: String(targetUnit.unidad || targetUnit.id),
+      piso: String(targetUnit.piso || ''),
+      depto: String(deptoVal),
+      dto: String(deptoVal), // Guardamos ambos para compatibilidad total con cualquier vista
+      propietario: String(targetUnit.propietario || ''),
+      nombre: String(nombre || '').trim(),
+      apellido: String(apellido || '').trim(),
       date: String(date).trim(),
       turno: String(turno).trim(),
       createdAt: new Date().toISOString()
@@ -140,7 +144,7 @@ router.post('/', async (req, res) => {
           turno,
           unidad: targetUnit.unidad || targetUnit.id,
           piso: targetUnit.piso,
-          dto: targetUnit.depto || targetUnit.dto,
+          dto: deptoVal,
           propietario: targetUnit.propietario
         });
       } catch (mailErr) {
@@ -155,19 +159,81 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/reservations/:id
-router.delete('/:id', (req, res) => {
+// PUT /api/reservations/:id — Actualizar reserva existente
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { date, turno, nombre, apellido, unit_pin } = req.body;
+
     let reservations = readReservations();
-    const initialLength = reservations.length;
-    
-    const filtered = reservations.filter(r => String(r.id) !== String(id));
-    
-    if (filtered.length === initialLength) {
+    const index = reservations.findIndex(r => String(r.id) === String(id));
+
+    if (index === -1) {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
+    const currentRes = reservations[index];
+    const units = db.units.all();
+    const targetUnit = units.find(u => String(u.unidad || u.id) === String(currentRes.unit_id));
+
+    if (!targetUnit) {
+      return res.status(400).json({ error: 'Unidad asociada no encontrada.' });
+    }
+
+    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
+      return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
+    }
+
+    // Verificar si el nuevo turno o fecha ya está ocupado por otra reserva
+    if (date && turno && (date !== currentRes.date || turno !== currentRes.turno)) {
+      const occupied = reservations.some(r => {
+        if (!r || String(r.id) === String(id)) return false;
+        return String(r.date) === String(date) && normalizeStr(r.turno) === normalizeStr(turno);
+      });
+      if (occupied) {
+        return res.status(400).json({ error: 'Ese turno ya se encuentra ocupado.' });
+      }
+    }
+
+    reservations[index] = {
+      ...currentRes,
+      date: date ? String(date).trim() : currentRes.date,
+      turno: turno ? String(turno).trim() : currentRes.turno,
+      nombre: nombre !== undefined ? String(nombre).trim() : currentRes.nombre,
+      apellido: apellido !== undefined ? String(apellido).trim() : currentRes.apellido
+    };
+
+    writeReservations(reservations);
+    res.json({ ok: true, success: true, reservation: reservations[index] });
+  } catch (err) {
+    console.error('Error al actualizar reserva:', err);
+    res.status(500).json({ error: 'Error al actualizar la reserva.' });
+  }
+});
+
+// DELETE /api/reservations/:id — Eliminar reserva validando PIN
+router.delete('/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { unit_pin } = req.body || {};
+
+    let reservations = readReservations();
+    const reservation = reservations.find(r => String(r.id) === String(id));
+    
+    if (!reservation) {
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
+
+    // Validar PIN de la unidad propietaria de la reserva si se provee
+    if (unit_pin) {
+      const units = db.units.all();
+      const targetUnit = units.find(u => String(u.unidad || u.id) === String(reservation.unit_id));
+      if (targetUnit && targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin).trim()) {
+        return res.status(400).json({ error: 'PIN incorrecto para cancelar la reserva.' });
+      }
+    }
+
+    const filtered = reservations.filter(r => String(r.id) !== String(id));
     writeReservations(filtered);
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
   } catch (err) {
