@@ -2,31 +2,57 @@ const XLSX = require('xlsx');
 const db = require('../db');
 
 /**
- * Genera un informe mensual de reservas buscando y filtrando de forma robusta.
- * @param {string} period - "YYYY-MM"
+ * Genera un informe mensual normalizando inteligentemente cualquier formato de período.
+ * @param {string} period
  */
 function buildMonthlyReport(period) {
+  let targetYear = '';
+  let targetMonth = '';
+
+  // Normalizamos el período ingresado (soporta "9-2026", "2026-09", "09/2026", etc.)
+  if (period) {
+    const cleanStr = String(period).trim();
+    const parts = cleanStr.split(/[-/]/);
+    if (parts.length === 2) {
+      if (parts[0].length === 4) {
+        targetYear = parts[0];
+        targetMonth = parts[1].padStart(2, '0');
+      } else if (parts[1].length === 4) {
+        targetYear = parts[1];
+        targetMonth = parts[0].padStart(2, '0');
+      }
+    }
+  }
+
+  // Si no se pudo interpretar, usamos el mes y año actual por defecto
+  const now = new Date();
+  const currentYear = String(now.getFullYear());
+  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+  const finalYear = targetYear || currentYear;
+  const finalMonth = targetMonth || currentMonth;
+  const normalizedPeriod = `${finalYear}-${finalMonth}`;
+
   let allRows = [];
   try {
-    // 1. Intentamos obtener todas las reservas posibles de la base de datos
     let rawAll = [];
     if (db.reservations && typeof db.reservations.all === 'function') {
       rawAll = db.reservations.all();
     } else if (db.reservations && typeof db.reservations.byPeriod === 'function') {
-      rawAll = db.reservations.byPeriod(period);
+      rawAll = db.reservations.byPeriod(normalizedPeriod);
     }
 
-    // Aseguramos que sea un arreglo plano
     if (!Array.isArray(rawAll) && rawAll) {
       rawAll = Object.values(rawAll);
     }
 
-    // 2. Filtramos manualmente por el período (YYYY-MM) evaluando cualquier formato de fecha
+    // Filtramos flexiblemente buscando coincidencia del año y mes
     allRows = (Array.isArray(rawAll) ? rawAll : []).filter(r => {
       if (!r) return false;
-      // Buscamos en todas las propiedades posibles donde suela estar la fecha
       const fechaStr = String(r.date || r.fecha || r.day || r.created_at || '');
-      return fechaStr.startsWith(period) || fechaStr.includes(period);
+      return fechaStr.includes(`${finalYear}-${finalMonth}`) || 
+             fechaStr.includes(`${finalMonth}/${finalYear}`) ||
+             fechaStr.startsWith(normalizedPeriod);
     });
 
   } catch (e) {
@@ -99,7 +125,7 @@ function buildMonthlyReport(period) {
     console.error('Error generando Excel:', e);
   }
 
-  const filename = `informe-reservas-SUM-Holmberg4040-${period}.xlsx`;
+  const filename = `informe-reservas-SUM-Holmberg4040-${normalizedPeriod}.xlsx`;
   return { buffer, filename, rows: allRows, totalsByUnit };
 }
 
