@@ -3,25 +3,19 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const xlsx = require('xlsx');
-// IMPORTANTE: Usamos una única instancia consistente de db
 const db = require('../db'); 
 const { buildMonthlyReport } = require('../utils/report'); 
-// Las funciones de mailer no se usan en este bloque, pero las mantenemos por compatibilidad
 const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Middleware de autenticación
 function requireAdmin(req, res, next) {
   if (req.session && req.session.isAdmin) return next();
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
-// --- Autenticación ---
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
-  
-  // 1. Verificamos contra las variables de entorno
   const envUser = process.env.ADMIN_USER || 'admin';
   const envPass = process.env.ADMIN_PASSWORD || 'Holmberg4040';
 
@@ -31,7 +25,6 @@ router.post('/login', (req, res) => {
     return res.json({ ok: true, username: envUser });
   }
 
-  // 2. Si no, contra la base de datos (usando db.admin.byUsername)
   const adminUser = db.admin.byUsername(username);
   if (adminUser && bcrypt.compareSync(password || '', adminUser.password_hash)) {
     req.session.isAdmin = true;
@@ -54,12 +47,10 @@ router.get('/me', (req, res) => {
   res.json({ isAdmin: false });
 });
 
-// --- Dashboard & Informes ---
 router.get('/dashboard', requireAdmin, (req, res) => {
   try {
     const period = req.query.period || new Date().toISOString().slice(0, 7);
     
-    // Validamos que exista la función de reporte
     if (typeof buildMonthlyReport !== 'function') {
       throw new Error('Módulo de reportes no disponible.');
     }
@@ -68,7 +59,6 @@ router.get('/dashboard', requireAdmin, (req, res) => {
     const totalsByUnit = reportResult.totalsByUnit || [];
     const rows = reportResult.rows || [];
 
-    // Obtenemos los periodos disponibles de db
     let resPeriods = [];
     if (db.reservations && typeof db.reservations.distinctPeriods === 'function') {
       resPeriods = db.reservations.distinctPeriods();
@@ -87,7 +77,6 @@ router.get('/dashboard', requireAdmin, (req, res) => {
   }
 });
 
-// --- Descarga de Informe en Excel ---
 router.get('/download-report', requireAdmin, (req, res) => {
   try {
     const period = req.query.period || new Date().toISOString().slice(0, 7);
@@ -107,14 +96,11 @@ router.get('/download-report', requireAdmin, (req, res) => {
 });
 
 router.get('/report-log', requireAdmin, (req, res) => {
-  // Obtenemos el log de db
   const logs = (db.reportLog && typeof db.reportLog.all === 'function') ? db.reportLog.all() : [];
   res.json(logs);
 });
 
-// --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  // Obtenemos las unidades de db (ya mapeadas con el campo baja por defecto en db.js)
   const units = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
   res.json(units);
 });
@@ -145,7 +131,14 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
-// --- NUEVA RUTA: Dar de BAJA / ALTA a una unidad ---
+// --- RUTA PARA ACTUALIZAR EMAIL DESDE LA TABLA ---
+router.put('/units/:id/email', requireAdmin, (req, res) => {
+  const { email } = req.body;
+  const unit = (db.units && typeof db.units.setEmail === 'function') ? db.units.setEmail(req.params.id, email) : null;
+  if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
+  res.json({ success: true, unit });
+});
+
 router.put('/units/:id/baja', requireAdmin, (req, res) => {
   const { baja } = req.body;
   if (typeof baja !== 'boolean') {
@@ -156,10 +149,9 @@ router.put('/units/:id/baja', requireAdmin, (req, res) => {
   res.json({ success: true, unit });
 });
 
-// --- Agregar Unidad Manualmente ---
 router.post('/units/add', requireAdmin, (req, res) => {
   try {
-    const { unidad, piso, depto, propietario, pin } = req.body;
+    const { unidad, piso, depto, propietario, email, pin } = req.body;
     if (!unidad) return res.status(400).json({ error: 'El número de unidad es obligatorio.' });
 
     const uVal = String(unidad).padStart(4, '0');
@@ -175,25 +167,23 @@ router.post('/units/add', requireAdmin, (req, res) => {
       piso: String(piso || ''),
       depto: String(depto || ''),
       propietario: String(propietario || ''),
+      email: String(email || '').trim(),
       pin: pin && /^\d{4}$/.test(String(pin)) ? String(pin) : Math.floor(1000 + Math.random() * 9000).toString(),
-      baja: false // Nueva unidad inicia activa por defecto
+      baja: false
     };
 
     currentUnits.push(newUnit);
     if (db.units && typeof db.units.saveAll === 'function') {
         db.units.saveAll(currentUnits);
-    } else if (typeof db.save === 'function') {
-        db.save();
     }
     
     res.json({ success: true, unit: newUnit });
   } catch (err) {
-      console.error('Error al agregar unidad:', err);
+    console.error('Error al agregar unidad:', err);
     res.status(500).json({ error: 'Error al intentar guardar la unidad.' });
   }
 });
 
-// --- Importar Excel ---
 router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
@@ -210,8 +200,9 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
         piso: String(row['Piso'] || row['piso'] || 'PB'),
         depto: String(row['Depto'] || row['depto'] || row['DTO'] || 'A'),
         propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
+        email: String(row['Email'] || row['email'] || row['Correo'] || row['correo'] || '').trim(),
         pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
-        baja: false // Unidades importadas inician activas por defecto
+        baja: false
       };
     });
 
@@ -225,8 +216,6 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
 
     if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(mergedUnits);
-    } else if (typeof db.save === 'function') {
-      db.save();
     }
 
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
@@ -236,15 +225,12 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
   }
 });
 
-// --- Eliminar Unidades ---
 router.delete('/units/delete', requireAdmin, (req, res) => {
   try {
     const { ids, deleteAll } = req.body;
     if (deleteAll) {
       if (db.units && typeof db.units.saveAll === 'function') {
         db.units.saveAll([]);
-      } else if (typeof db.save === 'function') {
-        db.save();
       }
       return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
     }
@@ -254,13 +240,11 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
 
     if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(filteredUnits);
-    } else if (typeof db.save === 'function') {
-      db.save();
     }
 
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
-      console.error('Error al eliminar unidades:', err);
+    console.error('Error al eliminar unidades:', err);
     res.status(500).json({ error: 'Error al eliminar unidades.' });
   }
 });
