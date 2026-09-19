@@ -16,8 +16,14 @@ function toast(msg, type = '') {
   setTimeout(() => el.remove(), 4200);
 }
 
+// Solución definitiva para que muestre bien el piso y el departamento/dto sin undefined
 function unitLabel(u) {
-  return `${u.piso === 'PB' ? 'PB ' + u.dto : 'Piso ' + u.piso + ' ' + u.dto} — ${u.propietario}`;
+  const piso = u.piso !== undefined && u.piso !== null ? u.piso : (u.floor || '');
+  const dto = u.dto !== undefined && u.dto !== null ? u.dto : (u.departamento || u.letter || '');
+  const prop = u.propietario !== undefined && u.propietario !== null ? u.propietario : (u.owner || '');
+  
+  const ubicacion = piso === 'PB' ? `PB ${dto}` : `Piso ${piso} ${dto}`;
+  return `${ubicacion.trim()} — ${prop}`;
 }
 
 // ---------- Estado ----------
@@ -26,7 +32,7 @@ let units = [];
 let reservationsByDate = {}; 
 let selectedDate = null;
 let currentPinUnit = null; 
-let isSubmittingReservation = false; // Bloqueo anti-doble envío a nivel global
+let isSubmittingReservation = false;
 
 // ---------- Carga inicial ----------
 async function init() {
@@ -211,7 +217,9 @@ function openDayModal(iso) {
 function renderTurnoCard(iso, turno, reserva, isPast) {
   const label = turno === 'dia' ? '☀️ Turno Día' : '🌙 Turno Noche';
   if (reserva) {
-    const unidadLabel = reserva.piso === 'PB' ? `PB ${reserva.dto}` : `Piso ${reserva.piso} ${reserva.dto}`;
+    const pisoVal = reserva.piso !== undefined && reserva.piso !== null ? reserva.piso : (reserva.floor || '');
+    const dtoVal = reserva.dto !== undefined && reserva.dto !== null ? reserva.dto : (reserva.departamento || reserva.letter || '');
+    const unidadLabel = pisoVal === 'PB' ? `PB ${dtoVal}` : `Piso ${pisoVal} ${dtoVal}`;
     return `
       <div class="turno-card">
         <div class="turno-head">
@@ -219,8 +227,8 @@ function renderTurnoCard(iso, turno, reserva, isPast) {
           <span class="status-pill ocupado">Ocupado</span>
         </div>
         <div class="turno-info">
-          <b>Unidad:</b> ${unidadLabel} (${reserva.propietario})<br>
-          <b>Reservó:</b> ${reserva.nombre} ${reserva.apellido}
+          <b>Unidad:</b> ${unidadLabel.trim()} (${reserva.propietario || ''})<br>
+          <b>Reservó:</b> ${reserva.nombre || ''} ${reserva.apellido || ''}
         </div>
         ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
       </div>`;
@@ -280,7 +288,6 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
 async function onSubmitReserva(e) {
   e.preventDefault();
 
-  // Bloqueo estricto inmediato mediante bandera de ejecución
   if (isSubmittingReservation) return;
   isSubmittingReservation = true;
 
@@ -337,7 +344,11 @@ async function onSubmitReserva(e) {
       toast('¡Turno reservado con éxito! 🎉', 'success');
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
+
+    // Cerramos ambos modales para evitar que quede superpuesto o congelado
     toggleOverlay('formOverlay', false);
+    toggleOverlay('dayOverlay', false);
+
     await loadYear(currentYear);
     renderYearGrid();
     if (currentPinUnit) await loadMisReservas();
@@ -477,7 +488,7 @@ function renderMisReservas(list) {
     <div class="mr-item">
       <div class="info">
         <b>${fmtFecha(r.date)} — ${r.turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}</b>
-        ${r.nombre} ${r.apellido}
+        ${r.nombre || ''} ${r.apellido || ''}
       </div>
       <div class="mr-actions">
         ${!isPast ? `
