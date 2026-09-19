@@ -2,51 +2,38 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const { sendReservationConfirmation } = require('../utils/mailer');
 
-const dbFile = path.join(__dirname, '../data/db.json');
+const dbFile = path.join(__dirname, '../data/reservations.json');
 const unitsFile = path.join(__dirname, '../data/units.json');
 
-function readData(file, fallback) {
+function readData(filePath, defaultVal) {
   try {
-    if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, 'utf8'));
-    }
-  } catch (e) {}
-  return fallback;
-}
-
-function writeData(file, data) {
-  try {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-  } catch (e) {}
-}
-
-// Obtener reservas
-router.get('/', (req, res) => {
-  try {
-    const { year, unit_id } = req.query;
-    let reservations = readData(dbFile, []);
-    
-    if (!Array.isArray(reservations)) reservations = [];
-
-    if (year) {
-      reservations = reservations.filter(r => r && r.date && String(r.date).startsWith(String(year)));
-    }
-
-    if (unit_id) {
-      reservations = reservations.filter(r => r && (
-        String(r.unit_id) === String(unit_id) || String(r.unitId) === String(unit_id)
-      ));
-    }
-
-    res.json(reservations);
+    if (!fs.existsSync(filePath)) return defaultVal;
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
   } catch (err) {
-    res.json([]);
+    console.error(`Error reading ${filePath}:`, err);
+    return defaultVal;
   }
+}
+
+function writeData(filePath, data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`Error writing ${filePath}:`, err);
+  }
+}
+
+// GET /api/reservations
+router.get('/', (req, res) => {
+  const reservations = readData(dbFile, []);
+  res.json(reservations);
 });
 
-// Crear reserva (con validación de BAJA y PIN estricto)
-router.post('/', (req, res) => {
+// POST /api/reservations — Crear reserva y enviar mail automático
+router.post('/', async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
 
@@ -70,12 +57,10 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'Unidad no encontrada.' });
     }
 
-    // --- NUEVA VALIDACIÓN: Verificar si la unidad está dada de baja ---
     if (targetUnit.baja === true) {
       return res.status(400).json({ error: 'Esta unidad se encuentra dada de baja y no puede realizar reservas.' });
     }
 
-    // Validación estricta: el PIN es obligatorio y debe coincidir exactamente
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
@@ -107,6 +92,22 @@ router.post('/', (req, res) => {
     reservations.push(newReservation);
     writeData(dbFile, reservations);
 
+    // Enviar correo electrónico de confirmación si tiene mail válido
+    if (targetUnit.email && targetUnit.email.includes('@')) {
+      try {
+        await sendReservationConfirmation(targetUnit.email, {
+          date,
+          turno,
+          unidad: targetUnit.unidad || targetUnit.id,
+          piso: targetUnit.piso,
+          dto: targetUnit.dto,
+          propietario: targetUnit.propietario
+        });
+      } catch (mailErr) {
+        console.error('[WARNING] No se pudo enviar el correo de confirmación:', mailErr.message);
+      }
+    }
+
     res.json({ ok: true, success: true, reservation: newReservation });
   } catch (err) {
     console.error("Error crítico en POST /api/reservations:", err);
@@ -114,19 +115,22 @@ router.post('/', (req, res) => {
   }
 });
 
-// Cancelar reserva
+// DELETE /api/reservations/:id
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
     let reservations = readData(dbFile, []);
-    if (!Array.isArray(reservations)) reservations = [];
+    const initialLength = reservations.length;
+    reservations = reservations.filter(r => String(r.id) !== String(id));
+    
+    if (reservations.length === initialLength) {
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
 
-    const filtered = reservations.filter(r => r && String(r.id) !== String(id));
-    writeData(dbFile, filtered);
-
-    res.json({ ok: true });
+    writeData(dbFile, reservations);
+    res.json({ success: true, message: 'Reserva eliminada correctamente.' });
   } catch (err) {
-    res.status(500).json({ error: 'Error al cancelar la reserva.' });
+    res.status(500).json({ error: 'Error al eliminar la reserva.' });
   }
 });
 
