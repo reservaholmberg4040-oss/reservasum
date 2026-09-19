@@ -71,27 +71,61 @@ router.get('/dashboard', requireAdmin, (req, res) => {
       });
     }
 
-    const { totalsByUnit, rows } = buildMonthlyReport(period);
+    const reportResult = buildMonthlyReport(period) || {};
+    const totalsByUnit = reportResult.totalsByUnit || [];
+    const rows = reportResult.rows || [];
+
+    // Obtenemos los periodos disponibles de forma ultra segura
+    let periodosDisponibles = [];
+    try {
+      if (db.reservations && typeof db.reservations.distinctPeriods === 'function') {
+        const resPeriods = db.reservations.distinctPeriods();
+        periodosDisponibles = Array.isArray(resPeriods) ? resPeriods : [];
+      } else if (db.reservations && typeof db.reservations.all === 'function') {
+        const allRes = db.reservations.all();
+        if (Array.isArray(allRes)) {
+          const set = new Set();
+          allRes.forEach(r => {
+            const d = r && (r.date || r.fecha) ? String(r.date || r.fecha).slice(0, 7) : '';
+            if (d) set.add(d);
+          });
+          periodosDisponibles = Array.from(set).sort().reverse();
+        }
+      }
+    } catch (errPeriods) {
+      console.error('No se pudieron calcular los periodos:', errPeriods);
+    }
 
     res.json({
       period,
-      totalReservasMes: rows ? rows.length : 0,
-      unidadesActivas: totalsByUnit ? totalsByUnit.length : 0,
-      totalsByUnit: totalsByUnit || [],
-      periodosDisponibles: typeof db.reservations.distinctPeriods === 'function' ? db.reservations.distinctPeriods() : []
+      totalReservasMes: rows.length,
+      unidadesActivas: totalsByUnit.length,
+      totalsByUnit: totalsByUnit,
+      periodosDisponibles: periodosDisponibles.length > 0 ? periodosDisponibles : [period]
     });
   } catch (err) {
     console.error('Error en /dashboard:', err);
     res.status(500).json({ error: 'Error interno al generar el reporte: ' + err.message });
   }
 });
+
 router.get('/report-log', requireAdmin, (req, res) => {
-  res.json(db.reportLog.all());
+  try {
+    const logs = (db.reportLog && typeof db.reportLog.all === 'function') ? db.reportLog.all() : [];
+    res.json(Array.isArray(logs) ? logs : []);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 // --- Gestión de Unidades ---
 router.get('/units', requireAdmin, (req, res) => {
-  res.json(db.units.all());
+  try {
+    const units = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
+    res.json(Array.isArray(units) ? units : []);
+  } catch (e) {
+    res.json([]);
+  }
 });
 
 router.put('/units/:id/pin', requireAdmin, (req, res) => {
@@ -99,13 +133,13 @@ router.put('/units/:id/pin', requireAdmin, (req, res) => {
   if (!/^\d{4}$/.test(String(pin || ''))) {
     return res.status(400).json({ error: 'El PIN debe ser de 4 dígitos numéricos.' });
   }
-  const unit = db.units.setPin(req.params.id, pin);
+  const unit = db.units && typeof db.units.setPin === 'function' ? db.units.setPin(req.params.id, pin) : null;
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
 
 router.post('/units/:id/regenerate-pin', requireAdmin, (req, res) => {
-  const unit = db.units.regeneratePin(req.params.id);
+  const unit = db.units && typeof db.units.regeneratePin === 'function' ? db.units.regeneratePin(req.params.id) : null;
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
@@ -115,7 +149,7 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   if (!propietario || !propietario.trim()) {
     return res.status(400).json({ error: 'El propietario no puede quedar vacío.' });
   }
-  const unit = db.units.setPropietario(req.params.id, propietario);
+  const unit = db.units && typeof db.units.setPropietario === 'function' ? db.units.setPropietario(req.params.id, propietario) : null;
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
   res.json(unit);
 });
@@ -130,9 +164,9 @@ router.post('/units/add', requireAdmin, (req, res) => {
     }
 
     const uVal = String(unidad).padStart(4, '0');
-    const currentUnits = db.units.all();
+    const currentUnits = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
 
-    const exists = currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal);
+    const exists = Array.isArray(currentUnits) && currentUnits.some(u => String(u.unidad) === uVal || String(u.id) === uVal);
     if (exists) {
       return res.status(400).json({ error: `La unidad ${uVal} ya existe.` });
     }
@@ -148,7 +182,7 @@ router.post('/units/add', requireAdmin, (req, res) => {
 
     currentUnits.push(newUnit);
 
-    if (typeof db.units.saveAll === 'function') {
+    if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(currentUnits);
     } else if (typeof db.save === 'function') {
       db.save();
@@ -182,11 +216,11 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     });
 
     const replaceAll = req.query.replace === 'true';
-    let currentUnits = replaceAll ? [] : db.units.all();
+    let currentUnits = replaceAll ? [] : ((db.units && typeof db.units.all === 'function') ? db.units.all() : []);
 
-    const mergedUnits = [...currentUnits, ...importedUnits];
+    const mergedUnits = [...(Array.isArray(currentUnits) ? currentUnits : []), ...importedUnits];
 
-    if (typeof db.units.saveAll === 'function') {
+    if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(mergedUnits);
     } else if (typeof db.save === 'function') {
       db.save();
@@ -203,7 +237,7 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
   try {
     const { ids, deleteAll } = req.body;
     if (deleteAll) {
-      if (typeof db.units.saveAll === 'function') {
+      if (db.units && typeof db.units.saveAll === 'function') {
         db.units.saveAll([]);
       } else if (typeof db.save === 'function') {
         db.save();
@@ -211,10 +245,10 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
       return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
     }
 
-    const currentUnits = db.units.all();
-    const filteredUnits = currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id)));
+    const currentUnits = (db.units && typeof db.units.all === 'function') ? db.units.all() : [];
+    const filteredUnits = Array.isArray(currentUnits) ? currentUnits.filter(u => !ids.includes(String(u.unidad)) && !ids.includes(String(u.id))) : [];
 
-    if (typeof db.units.saveAll === 'function') {
+    if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(filteredUnits);
     } else if (typeof db.save === 'function') {
       db.save();
