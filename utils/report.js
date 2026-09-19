@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 const db = require('../db');
 
 /**
- * Genera el informe mensual de reservas buscando de forma flexible y robusta.
+ * Genera el informe mensual de reservas buscando de forma flexible.
  * @param {string} period - El período a consultar en formato YYYY-MM (ej: "2026-09")
  */
 function buildMonthlyReport(period) {
@@ -17,18 +17,18 @@ function buildMonthlyReport(period) {
     // 2. Aseguramos que sea un arreglo plano
     if (!Array.isArray(rawAll)) {
       if (typeof rawAll === 'object' && rawAll !== null) {
-        rawAll = Object.values(rawAll); // Convierte objetos tipo {0: {...}, 1: {...}} en array
+        rawAll = Object.values(rawAll);
       } else {
         rawAll = [];
       }
     }
 
-    // 3. Filtramos manualmente por el período (YYYY-MM) de forma flexible
+    // 3. Filtramos manualmente por el período (YYYY-MM)
     allRows = rawAll.filter(r => {
       if (!r) return false;
       
       // Buscamos en todas las propiedades posibles donde la fecha pueda estar guardada
-      const possibleDateKeys = ['date', 'fecha', 'day', 'created_at', 'start_time', 'startTime'];
+      const possibleDateKeys = ['date', 'fecha', 'day', 'created_at'];
       let fechaEncontrada = null;
 
       for (const key of possibleDateKeys) {
@@ -51,7 +51,6 @@ function buildMonthlyReport(period) {
     allRows = [];
   }
 
-  // El resto de la lógica para armar el Excel permanece igual
   const totalsMap = {};
   for (const r of allRows) {
     const key = r.unidad || r.unit || 'S/N';
