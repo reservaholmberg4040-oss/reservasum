@@ -78,11 +78,10 @@ function initAdminPanel() {
     });
   }
 
-  // --- Botón Descarga de Excel (Corregido y optimizado) ---
+  // --- Botón Descarga de Excel ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', () => {
-      // Buscamos de forma flexible el input de período en el DOM
       const periodInput = document.querySelector('input[type="month"]') || document.getElementById('month-select');
       let rawValue = periodInput ? periodInput.value : '';
       
@@ -90,12 +89,10 @@ function initAdminPanel() {
       if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
         period = rawValue;
       } else {
-        // Si no hay valor válido, por defecto usamos el mes actual
         const now = new Date();
         period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
 
-      // Redirige directamente al endpoint del servidor que descarga el Excel
       window.location.href = `/api/admin/download-report?period=${period}`;
     });
   }
@@ -127,12 +124,11 @@ function initAdminPanel() {
 
       const unidad = document.getElementById('input-unidad')?.value.trim();
       const piso = document.getElementById('input-piso')?.value.trim();
-      const depto = document.getElementById('input-dto')?.value.trim(); // Corregido ID a input-dto
+      const depto = document.getElementById('input-dto')?.value.trim();
       const propietario = document.getElementById('input-propietario')?.value.trim();
       const pin = document.getElementById('input-pin')?.value.trim();
 
       try {
-        // Ruta corregida a /api/admin/units/add (según tu routes/admin.js)
         let res = await fetch('/api/admin/units/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -321,9 +317,8 @@ async function loadUnits() {
     units.forEach(u => {
       const tr = document.createElement('tr');
       const unitId = u.id || u.unidad;
-      const pisoDtoStr = u.piso && u.depto ? `${u.piso} ${u.depto}` : (u.piso || u.depto || '-'); // Corregido u.dto a u.depto
+      const pisoDtoStr = u.piso && u.depto ? `${u.piso} ${u.depto}` : (u.piso || u.depto || '-');
 
-      // --- BAJA --- Definimos si está dada de baja
       const isBaja = u.baja === true;
 
       tr.innerHTML = `
@@ -341,8 +336,6 @@ async function loadUnits() {
         <td>
           <button class="btn-xs" style="padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;" onclick="regeneratePin('${unitId}')">Regenerar PIN</button>
         </td>
-        
-        <!-- --- NUEVA CELDA BAJA --- con estilo centrado -->
         <td style="text-align: center;">
           <input type="checkbox" 
                  class="unit-baja-checkbox" 
@@ -354,8 +347,134 @@ async function loadUnits() {
       tbody.appendChild(tr);
     });
 
-    // --- BAJA --- Agregamos el evento a todos los checkboxes recién creados
     document.querySelectorAll('.unit-baja-checkbox').forEach(cb => {
       cb.addEventListener('change', (e) => {
         const unitId = e.target.dataset.unitId;
         const isChecked = e.target.checked;
+        updateUnitBaja(unitId, isChecked);
+      });
+    });
+
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center; padding: 15px;">Error al cargar unidades.</td></tr>';
+  }
+}
+
+// Edición en tiempo real
+window.updatePin = async (unitId, newPin) => {
+  if (!/^\d{4}$/.test(newPin)) {
+    alert('El PIN debe tener exactamente 4 dígitos numéricos.');
+    return loadUnits();
+  }
+
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/pin`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: newPin })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo guardar el PIN.'));
+      loadUnits();
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+    loadUnits();
+  }
+};
+
+window.updatePropietario = async (unitId, newOwner) => {
+  if (!newOwner.trim()) {
+    alert('El propietario no puede quedar vacío.');
+    return loadUnits();
+  }
+
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/propietario`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ propietario: newOwner })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo guardar el propietario.'));
+      loadUnits();
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+    loadUnits();
+  }
+};
+
+window.regeneratePin = async (unitId) => {
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/regenerate-pin`, {
+      method: 'POST'
+    });
+
+    if (res.ok) {
+      loadUnits();
+    } else {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo regenerar.'));
+    }
+  } catch (err) {
+    alert('Error al conectar con el servidor.');
+  }
+};
+
+async function updateUnitBaja(unitId, isBaja) {
+  try {
+    const res = await fetch(`/api/admin/units/${unitId}/baja`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baja: isBaja })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      const cb = document.querySelector(`.unit-baja-checkbox[data-unit-id="${unitId}"]`);
+      if (cb) cb.checked = !isBaja; 
+      alert('Error: ' + (err.error || 'No se pudo actualizar el estado de la unidad.'));
+    }
+  } catch (err) {
+    console.error('Error de conexión:', err);
+    const cb = document.querySelector(`.unit-baja-checkbox[data-unit-id="${unitId}"]`);
+    if (cb) cb.checked = !isBaja;
+    alert('Error al conectar con el servidor.');
+  }
+}
+
+async function loadReportLog() {
+  const tbody = document.getElementById('history-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/report-log');
+    if (res.status === 401) { window.location.reload(); return; }
+    if (!res.ok) return;
+    const log = await res.json();
+
+    tbody.innerHTML = '';
+    if (!Array.isArray(log) || log.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>';
+      return;
+    }
+
+    log.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${item.period || '-'}</td>
+        <td>${item.sentAt ? new Date(item.sentAt).toLocaleString('es-AR') : '-'}</td>
+        <td>${item.recipient || '-'}</td>
+        <td><span class="badge badge-success">${item.status || 'ENVIADO'}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>';
+  }
+}
