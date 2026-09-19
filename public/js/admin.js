@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1. Verificamos primero si el usuario tiene sesión activa consultando al backend
   try {
     const checkRes = await fetch('/api/admin/dashboard');
     if (checkRes.status === 401) {
@@ -11,11 +10,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // 2. Si está logueado, inicializamos todo el panel
   initAdminPanel();
 });
 
-// Función que dibuja el formulario de login si no hay sesión
 function showLoginForm() {
   const container = document.body;
   container.innerHTML = `
@@ -65,7 +62,6 @@ function initAdminPanel() {
   loadUnits();
   loadReportLog();
 
-  // Inicializar el input de mes con el período actual (YYYY-MM) si está vacío
   const monthSelect = document.getElementById('month-select');
   if (monthSelect && !monthSelect.value) {
     const now = new Date();
@@ -83,12 +79,10 @@ function initAdminPanel() {
     });
   }
 
-  // --- BOTÓN DESCARGAR EXCEL ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', () => {
       const periodVal = monthSelect ? monthSelect.value : '';
-      
       let period = '';
       if (periodVal && /^\d{4}-\d{2}$/.test(periodVal)) {
         period = periodVal;
@@ -96,24 +90,20 @@ function initAdminPanel() {
         const now = new Date();
         period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
-
       window.location.href = `/api/admin/download-report?period=${period}`;
     });
   }
 
-  // Manejo del formulario de envío de reporte por correo
   const reportForm = document.getElementById('report-form');
   if (reportForm) {
     reportForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const period = monthSelect ? monthSelect.value : '';
       const recipient = document.getElementById('recipient-email')?.value || '';
-      
       alert(`Funcionalidad de envío por mail seleccionada para el período ${period} a ${recipient}.`);
     });
   }
 
-  // Modal Agregar Unidad
   const modal = document.getElementById('add-unit-modal');
   const btnOpenModal = document.getElementById('btn-open-add-modal');
   const btnCloseModal = document.getElementById('btn-close-modal');
@@ -132,7 +122,6 @@ function initAdminPanel() {
     });
   }
 
-  // Formulario Agregar Unidad
   const addForm = document.getElementById('add-unit-form');
   if (addForm) {
     addForm.addEventListener('submit', async (e) => {
@@ -172,7 +161,6 @@ function initAdminPanel() {
     });
   }
 
-  // Importar Excel
   const btnUploadExcel = document.getElementById('btn-upload-excel');
   if (btnUploadExcel) {
     btnUploadExcel.addEventListener('click', async () => {
@@ -208,7 +196,6 @@ function initAdminPanel() {
     });
   }
 
-  // Seleccionar todas
   const selectAll = document.getElementById('select-all-units');
   if (selectAll) {
     selectAll.addEventListener('change', (e) => {
@@ -217,7 +204,6 @@ function initAdminPanel() {
     });
   }
 
-  // Eliminar seleccionadas
   const btnDeleteSel = document.getElementById('btn-delete-selected');
   if (btnDeleteSel) {
     btnDeleteSel.addEventListener('click', async () => {
@@ -248,7 +234,6 @@ function initAdminPanel() {
     });
   }
 
-  // Eliminar TODAS
   const btnDeleteAll = document.getElementById('btn-delete-all');
   if (btnDeleteAll) {
     btnDeleteAll.addEventListener('click', async () => {
