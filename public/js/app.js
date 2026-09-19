@@ -8,6 +8,7 @@ function todayISO() { const t = new Date(); return toISODate(t.getFullYear(), t.
 
 function toast(msg, type = '') {
   const wrap = document.getElementById('toastWrap');
+  if (!wrap) return;
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
@@ -25,6 +26,7 @@ let units = [];
 let reservationsByDate = {}; // { 'YYYY-MM-DD': { dia: reservation|null, noche: reservation|null } }
 let selectedDate = null;
 let currentPinUnit = null; // { id, pin } — unidad "desbloqueada" en la pestaña Mis Reservas
+let isSubmittingReservation = false; // Bloqueo anti-doble clic
 
 // ---------- Carga inicial ----------
 async function init() {
@@ -56,6 +58,7 @@ async function loadYear(year) {
 
 function populateUnitSelect(selectId) {
   const sel = document.getElementById(selectId);
+  if (!sel) return;
   sel.innerHTML = '<option value="">Seleccioná la unidad...</option>' +
     units.map(u => `<option value="${u.unidad || u.id}">${unitLabel(u)}</option>`).join('');
 }
@@ -99,6 +102,7 @@ function setupYearSwitcher() {
 // ---------- Render calendario anual ----------
 function renderYearGrid() {
   const grid = document.getElementById('yearGrid');
+  if (!grid) return;
   grid.innerHTML = '';
   const today = todayISO();
 
@@ -148,7 +152,8 @@ function setupModals() {
 }
 
 function toggleOverlay(id, show) {
-  document.getElementById(id).classList.toggle('show', show);
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('show', show);
 }
 
 function fmtFecha(iso) {
@@ -236,6 +241,14 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
 
 async function onSubmitReserva(e) {
   e.preventDefault();
+
+  // Evitar doble envío si ya está procesando
+  if (isSubmittingReservation) return;
+  isSubmittingReservation = true;
+
+  const submitBtn = document.getElementById('submitReservaBtn');
+  const originalBtnText = submitBtn ? submitBtn.textContent : 'Confirmar reserva';
+
   const date = document.getElementById('reservaDate').value;
   const turno = document.getElementById('reservaTurno').value;
   const editId = document.getElementById('reservaEditId').value;
@@ -246,8 +259,21 @@ async function onSubmitReserva(e) {
   const alertBox = document.getElementById('formAlert');
   alertBox.innerHTML = '';
 
-  if (!unit_id) { alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; return; }
-  if (!/^\d{4}$/.test(unit_pin)) { alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; return; }
+  if (!unit_id) { 
+    alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; 
+    isSubmittingReservation = false; 
+    return; 
+  }
+  if (!/^\d{4}$/.test(unit_pin)) { 
+    alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; 
+    isSubmittingReservation = false; 
+    return; 
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando reserva...';
+  }
 
   try {
     let res, data;
@@ -271,12 +297,26 @@ async function onSubmitReserva(e) {
       toast('¡Turno reservado con éxito! 🎉', 'success');
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
+
+    // --- CIERRE SEGURO DE AMBOS MODALES ---
     toggleOverlay('formOverlay', false);
+    toggleOverlay('dayOverlay', false);
+
+    const form = document.getElementById('reservaForm');
+    if (form) form.reset();
+
     await loadYear(currentYear);
     renderYearGrid();
     if (currentPinUnit) await loadMisReservas();
+
   } catch (err) {
     alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
+  } finally {
+    isSubmittingReservation = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
+    }
   }
 }
 
@@ -330,38 +370,44 @@ async function doCancel(id) {
 
 // ---------- Mis reservas (unidad + PIN) ----------
 function setupPinForm() {
-  document.getElementById('pinForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const unitId = document.getElementById('misUnitSelect').value;
-    const pin = document.getElementById('misPinInput').value.trim();
-    const alertBox = document.getElementById('pinAlert');
-    alertBox.innerHTML = '';
+  const pinForm = document.getElementById('pinForm');
+  if (pinForm) {
+    pinForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const unitId = document.getElementById('misUnitSelect').value;
+      const pin = document.getElementById('misPinInput').value.trim();
+      const alertBox = document.getElementById('pinAlert');
+      if (alertBox) alertBox.innerHTML = '';
 
-    if (!unitId) { alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; return; }
+      if (!unitId) { if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; return; }
 
-    const res = await fetch(`/api/units/${unitId}/verify-pin`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+      const res = await fetch(`/api/units/${unitId}/verify-pin`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
+        return;
+      }
+
+      const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
+      currentPinUnit = { id: unitId, pin };
+      document.getElementById('pinAccessCard').style.display = 'none';
+      document.getElementById('pinUnlockedWrap').style.display = '';
+      document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
+      await loadMisReservas();
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
-      return;
-    }
+  }
 
-    const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
-    currentPinUnit = { id: unitId, pin };
-    document.getElementById('pinAccessCard').style.display = 'none';
-    document.getElementById('pinUnlockedWrap').style.display = '';
-    document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
-    await loadMisReservas();
-  });
-
-  document.getElementById('misLockBtn').addEventListener('click', () => {
-    currentPinUnit = null;
-    document.getElementById('pinAccessCard').style.display = '';
-    document.getElementById('pinUnlockedWrap').style.display = 'none';
-    document.getElementById('misPinInput').value = '';
-  });
+  const misLockBtn = document.getElementById('misLockBtn');
+  if (misLockBtn) {
+    misLockBtn.addEventListener('click', () => {
+      currentPinUnit = null;
+      document.getElementById('pinAccessCard').style.display = '';
+      document.getElementById('pinUnlockedWrap').style.display = 'none';
+      document.getElementById('misPinInput').value = '';
+    });
+  }
 }
 
 async function loadMisReservas() {
@@ -372,6 +418,7 @@ async function loadMisReservas() {
 
 function renderMisReservas(list) {
   const cont = document.getElementById('misReservasList');
+  if (!cont) return;
   if (!list.length) {
     cont.innerHTML = `<div class="empty-state"><div class="big">📅</div>Esta unidad todavía no tiene reservas.</div>`;
     return;
