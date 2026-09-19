@@ -8,16 +8,17 @@ const db = require('../db');
 function buildMonthlyReport(period) {
   let allRows = [];
   try {
-    // Intentamos usar el método nativo si existe, o caemos en un filtrado seguro sobre all()
+    let rawAll = [];
     if (db.reservations && typeof db.reservations.byPeriod === 'function') {
-      allRows = db.reservations.byPeriod(period) || [];
+      rawAll = db.reservations.byPeriod(period) || [];
     } else if (db.reservations && typeof db.reservations.all === 'function') {
-      const rawAll = db.reservations.all() || [];
-      allRows = rawAll.filter(r => {
-        const d = r.date || r.fecha || '';
-        return d.startsWith(period);
-      });
+      const res = db.reservations.all();
+      rawAll = Array.isArray(res) ? res : [];
     }
+    allRows = Array.isArray(rawAll) ? rawAll.filter(r => {
+      const d = r && (r.date || r.fecha) ? String(r.date || r.fecha) : '';
+      return d.startsWith(period);
+    }) : [];
   } catch (e) {
     console.error('Error al obtener reservas para el reporte:', e);
     allRows = [];
