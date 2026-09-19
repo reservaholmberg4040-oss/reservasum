@@ -123,7 +123,17 @@ const db = {
       }
       return null;
     },
-    // --- NUEVA FUNCIÓN: Marcar/Desmarcar BAJA ---
+    // --- FUNCIÓN: Actualizar Email ---
+    setEmail(id, email) {
+      const u = this.byId(id);
+      if (u) {
+        u.email = email ? String(email).trim() : '';
+        writeJson(unitsFile, dbData.units);
+        return u;
+      }
+      return null;
+    },
+    // --- Marcar/Desmarcar BAJA ---
     setBaja(id, estadoBaja) {
       const u = this.byId(id);
       if (u) {
@@ -146,7 +156,6 @@ const db = {
     add(log) {
       dbData.reportLog = dbData.reportLog || [];
       dbData.reportLog.push(log);
-      // Nota: El historial de reportes no se persiste en archivo en esta versión simple, solo en memoria.
     }
   }
 };
