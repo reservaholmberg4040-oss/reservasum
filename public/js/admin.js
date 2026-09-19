@@ -78,11 +78,12 @@ function initAdminPanel() {
     });
   }
 
-  // --- Botón Descarga de Excel ---
+  // --- Botón Descarga de Excel (Corregido y robusto para capturar el período) ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
     btnDownloadPdf.addEventListener('click', () => {
-      const periodInput = document.querySelector('input[type="month"]') || document.getElementById('month-select');
+      // Buscamos dinámicamente cualquier selector de mes o input de tipo month en la interfaz
+      const periodInput = document.querySelector('input[type="month"]') || document.getElementById('month-select') || document.getElementById('periodSelect');
       let rawValue = periodInput ? periodInput.value : '';
       
       let period = '';
