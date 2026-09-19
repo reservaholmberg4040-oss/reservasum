@@ -78,84 +78,24 @@ function initAdminPanel() {
     });
   }
 
-  // --- Botón Descargar PDF optimizado y robusto ---
+  // --- Botón Descarga de Excel ---
   const btnDownloadPdf = document.getElementById('btn-download-pdf');
   if (btnDownloadPdf) {
-    btnDownloadPdf.addEventListener('click', async () => {
-      try {
-        // Buscamos de forma flexible el input de período o asignamos el mes actual en formato YYYY-MM
-        const periodInput = document.querySelector('input[type="month"]') || document.getElementById('report-period') || document.querySelector('.admin-card input');
-        let rawValue = periodInput ? periodInput.value : '';
-        
-        let period = '';
-        if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
-          period = rawValue;
-        } else {
-          const now = new Date();
-          period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        }
-
-        const res = await fetch(`/api/admin/dashboard?period=${period}`);
-        if (!res.ok) throw new Error('No se pudo obtener la información del reporte.');
-        const data = await res.json();
-
-        let reportCard = document.querySelector('.admin-card');
-        if (!reportCard) {
-          alert('No se encontró el contenedor del reporte en la vista.');
-          return;
-        }
-
-        let rowsHtml = '';
-        if (data.totalsByUnit && data.totalsByUnit.length > 0) {
-          data.totalsByUnit.forEach(item => {
-            rowsHtml += `
-              <tr>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd;">Unidad ${item.unidad || item.id}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.propietario || 'Sin Propietario'}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.count || item.total_turnos || 0}</td>
-              </tr>`;
-          });
-        } else {
-          rowsHtml = `<tr><td colspan="3" style="text-align: center; padding: 15px; color: #6b7280;">No hay reservas registradas para este período.</td></tr>`;
-        }
-
-        const originalContent = reportCard.innerHTML;
-
-        reportCard.innerHTML = `
-          <div style="font-family: Arial, sans-serif; color: #111; padding: 10px;">
-            <h2 style="margin-bottom: 5px; color: #1f2937;">Informe Mensual de Reservas</h2>
-            <p style="color: #4b5563; font-size: 14px; margin-top: 0;">Período consultado: <b>${data.period}</b></p>
-            
-            <div style="display: flex; gap: 30px; margin: 15px 0; font-size: 14px; background: #f9fafb; padding: 10px; border-radius: 6px;">
-              <div><b>Total de Reservas del Mes:</b> ${data.totalReservasMes || 0}</div>
-              <div><b>Unidades Activas:</b> ${data.unidadesActivas || 0}</div>
-            </div>
-
-            <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px;">
-              <thead>
-                <tr style="background: #f4f5fb; text-align: left;">
-                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db;">Unidad</th>
-                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db;">Propietario</th>
-                  <th style="padding: 10px; border-bottom: 2px solid #d1d5db; text-align: center;">Cant. Reservas</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
-            </table>
-          </div>
-        `;
-
-        window.print();
-
-        setTimeout(() => {
-          reportCard.innerHTML = originalContent;
-        }, 1000);
-
-      } catch (err) {
-        console.error('Error al generar el PDF:', err);
-        alert('Ocurrió un error al preparar el reporte para imprimir.');
+    btnDownloadPdf.addEventListener('click', () => {
+      // Buscamos de forma flexible el input de período o asignamos el mes actual en formato YYYY-MM
+      const periodInput = document.querySelector('input[type="month"]') || document.getElementById('report-period') || document.querySelector('.admin-card input');
+      let rawValue = periodInput ? periodInput.value : '';
+      
+      let period = '';
+      if (rawValue && /^\d{4}-\d{2}$/.test(rawValue)) {
+        period = rawValue;
+      } else {
+        const now = new Date();
+        period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
+
+      // Redirige directamente al endpoint del servidor que descarga el Excel
+      window.location.href = `/api/admin/download-report?period=${period}`;
     });
   }
 
