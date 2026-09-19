@@ -9,6 +9,7 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Configuración de la sesión de usuario/admin
 app.use(session({
   secret: process.env.SESSION_SECRET || 'sum_holmberg_secret_key',
   resave: false,
@@ -20,18 +21,18 @@ app.use(session({
   }
 }));
 
-// PROTECCIÓN DE RUTAS ADMIN ANTES DE LOS ARCHIVOS ESTÁTICOS
+// Protección estricta para que nadie entre al panel sin sesión
 app.use(['/admin', '/admin.html'], (req, res, next) => {
   if (req.session && req.session.isAdmin) {
-    return next(); // Si es admin, lo deja pasar
+    return next();
   }
-  return res.redirect('/login.html'); // Si no está logueado, va al login
+  return res.redirect('/login.html');
 });
 
-// Archivos estáticos públicos
+// Archivos estáticos de la carpeta public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Importar rutas de la API
+// Importar y registrar las rutas de la API
 const adminRoutes = require('./routes/admin');
 const unitsRoutes = require('./routes/units');
 const reservationsRoutes = require('./routes/reservations');
