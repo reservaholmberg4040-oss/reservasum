@@ -11,7 +11,8 @@ function readReservations() {
   try {
     if (!fs.existsSync(reservationsFile)) return [];
     const data = fs.readFileSync(reservationsFile, 'utf8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Error leyendo reservations.json:', err);
     return [];
@@ -29,7 +30,6 @@ function writeReservations(data) {
   }
 }
 
-// Función auxiliar para normalizar textos (quita acentos, pasa a minúsculas y quita espacios)
 function normalizeStr(str) {
   if (!str) return '';
   return String(str)
@@ -39,11 +39,26 @@ function normalizeStr(str) {
     .trim();
 }
 
-// GET /api/reservations
+// GET /api/reservations — Soporta filtros por ?year=YYYY y ?unit_id=X
 router.get('/', (req, res) => {
   try {
-    const reservations = readReservations();
-    res.json(Array.isArray(reservations) ? reservations : []);
+    let reservations = readReservations();
+    const { year, unit_id } = req.query;
+
+    if (year) {
+      reservations = reservations.filter(r => r && r.date && String(r.date).startsWith(String(year)));
+    }
+
+    if (unit_id) {
+      reservations = reservations.filter(r => {
+        if (!r) return false;
+        const rUnit = String(r.unit_id || '').trim();
+        const target = String(unit_id).trim();
+        return rUnit === target || target.includes(rUnit) || rUnit.includes(target);
+      });
+    }
+
+    res.json(reservations);
   } catch (err) {
     console.error('Error en GET /api/reservations:', err);
     res.status(500).json({ error: 'Error al obtener las reservas.' });
@@ -87,12 +102,8 @@ router.post('/', async (req, res) => {
     }
 
     let reservations = readReservations();
-    if (!Array.isArray(reservations)) reservations = [];
 
-    // Depuración en consola del servidor
-    console.log(`[RESERVA INTENTO] Fecha: "${date}" | Turno: "${turno}" (Normalizado: "${normalizeStr(turno)}")`);
-
-    // Validación flexible y robusta de turnos ocupados
+    // Comprobación exacta de disponibilidad por fecha y turno normalizado
     const occupied = reservations.some(r => {
       if (!r) return false;
       const rDate = String(r.date || '').trim();
@@ -102,7 +113,6 @@ router.post('/', async (req, res) => {
     });
 
     if (occupied) {
-      console.log(`[BLOQUEADO] El turno ya figura ocupado en la base de datos.`);
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
@@ -114,8 +124,8 @@ router.post('/', async (req, res) => {
       propietario: targetUnit.propietario || '',
       nombre: nombre || '',
       apellido: apellido || '',
-      date,
-      turno,
+      date: String(date).trim(),
+      turno: String(turno).trim(),
       createdAt: new Date().toISOString()
     };
 
