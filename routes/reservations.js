@@ -1,15 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db'); // Usamos la misma instancia centralizada de la base de datos
+const fs = require('fs');
+const path = require('path');
+const db = require('../db'); // Para gestionar las unidades de forma segura
 const { sendReservationConfirmation } = require('../utils/mailer');
 
-// GET /api/reservations
+const reservationsFile = path.join(__dirname, '../data/reservations.json');
+
+function readReservations() {
+  try {
+    if (!fs.existsSync(reservationsFile)) return [];
+    const data = fs.readFileSync(reservationsFile, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    console.error('Error leyendo reservations.json:', err);
+    return [];
+  }
+}
+
+function writeReservations(data) {
+  try {
+    const dir = path.dirname(reservationsFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(reservationsFile, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error escribiendo reservations.json:', err);
+    throw err;
+  }
+}
+
+// GET /api/reservations — Devuelve todas las reservas para poblar el calendario
 router.get('/', (req, res) => {
   try {
-    const reservations = db.reservations.all();
-    res.json(reservations);
+    const reservations = readReservations();
+    res.json(Array.isArray(reservations) ? reservations : []);
   } catch (err) {
-    console.error('Error al obtener reservas:', err);
+    console.error('Error en GET /api/reservations:', err);
     res.status(500).json({ error: 'Error al obtener las reservas.' });
   }
 });
@@ -50,9 +76,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El PIN de la unidad es incorrecto o está vacío.' });
     }
 
-    const reservations = db.reservations.all() || [];
+    let reservations = readReservations();
+    if (!Array.isArray(reservations)) reservations = [];
 
-    // Validamos si el turno ya está ocupado para esa fecha y turno exactos
+    // Validamos si el turno ya está ocupado de forma exacta
     const occupied = reservations.some(r => r && String(r.date).trim() === String(date).trim() && String(r.turno).trim() === String(turno).trim());
     if (occupied) {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
@@ -71,7 +98,8 @@ router.post('/', async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    db.reservations.add(newReservation);
+    reservations.push(newReservation);
+    writeReservations(reservations);
 
     // Enviar correo electrónico de confirmación si tiene mail válido
     if (targetUnit.email && targetUnit.email.includes('@')) {
@@ -100,7 +128,7 @@ router.post('/', async (req, res) => {
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
-    let reservations = db.reservations.all() || [];
+    let reservations = readReservations();
     const initialLength = reservations.length;
     
     const filtered = reservations.filter(r => String(r.id) !== String(id));
@@ -109,7 +137,7 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: 'Reserva no encontrada.' });
     }
 
-    db.reservations.saveAll(filtered);
+    writeReservations(filtered);
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
   } catch (err) {
     console.error('Error al eliminar reserva:', err);
