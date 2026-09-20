@@ -2,12 +2,33 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const db = require('../db'); 
 const { sendReservationConfirmation } = require('../utils/mailer');
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 const configFile = path.join(__dirname, '../data/config.json');
+
+// --- CONFIGURACIÓN DE RATE LIMITING ---
+// 1. Limiter para creación de reservas (máximo 10 intentos cada 15 minutos por IP)
+const reservationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, 
+  message: { error: 'Demasiadas solicitudes de reserva desde esta IP, por favor intentá más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 2. Limiter estricto para operaciones que validan PIN (máximo 5 intentos cada 5 minutos por IP)
+const pinLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 5, 
+  message: { error: 'Demasiados intentos con PIN desde esta IP. Por seguridad, esperá unos minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+// -------------------------------------
 
 function readReservations() {
   try {
@@ -111,8 +132,8 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/reservations
-router.post('/', async (req, res) => {
+// POST /api/reservations (Protegido con rate limiters)
+router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
 
@@ -163,7 +184,6 @@ router.post('/', async (req, res) => {
     const unitUnidad = String(targetUnit.unidad || '').trim();
     const unitId = String(targetUnit.id || '').trim();
 
-    // Función auxiliar robusta para verificar si una reserva pertenece a esta unidad (sea por id o unidad)
     const belongsToUnit = (rUnit) => {
       const u = String(rUnit || '').trim();
       return u === unitIdentifier || (unitUnidad && u === unitUnidad) || (unitId && u === unitId);
@@ -207,7 +227,7 @@ router.post('/', async (req, res) => {
     }
     // --------------------------------------
 
-    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL (ROBUSTA) ---
+    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL ---
     const maxReservasMes = Number(config.max_reservas_mes) || 4;
     const targetDateObj = new Date(date + 'T00:00:00');
     const targetYear = targetDateObj.getFullYear();
@@ -228,7 +248,6 @@ router.post('/', async (req, res) => {
     }
     // --------------------------------------
 
-    // Validar turno ocupado
     const occupied = reservations.some(r => {
       if (!r) return false;
       const rDate = String(r.date || '').trim();
@@ -243,7 +262,7 @@ router.post('/', async (req, res) => {
 
     const deptoVal = targetUnit.depto || targetUnit.dto || '';
 
-   const newReservation = {
+    const newReservation = {
       id: Date.now().toString(),
       unit_id: unitIdentifier,
       piso: String(targetUnit.piso || ''),
@@ -254,7 +273,7 @@ router.post('/', async (req, res) => {
       apellido: String(apellido || '').trim(),
       date: String(date).trim(),
       turno: String(turno).trim(),
-      createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).replace(' ', 'T') + '-03:00' // <--- Forzado a hora de Argentina (UTC-3)
+      createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).replace(' ', 'T') + '-03:00'
     };
 
     reservations.push(newReservation);
@@ -286,8 +305,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/reservations/:id
-router.put('/:id', async (req, res) => {
+// PUT /api/reservations/:id (Protegido con rate limiter de PIN)
+router.put('/:id', pinLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     const { date, turno, nombre, apellido, unit_pin } = req.body;
@@ -346,8 +365,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/reservations/:id
-router.delete('/:id', (req, res) => {
+// DELETE /api/reservations/:id (Protegido con rate limiter de PIN)
+router.delete('/:id', pinLimiter, (req, res) => {
   try {
     const { id } = req.params;
     const { unit_pin } = req.body || {};
