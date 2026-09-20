@@ -11,7 +11,6 @@ const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 const configFile = path.join(__dirname, '../data/config.json');
 
 // --- CONFIGURACIÓN DE RATE LIMITING ---
-// 1. Limiter para creación de reservas (máximo 10 intentos cada 15 minutos por IP)
 const reservationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10, 
@@ -20,7 +19,6 @@ const reservationLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// 2. Limiter estricto para operaciones que validan PIN (máximo 5 intentos cada 5 minutos por IP)
 const pinLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5, 
@@ -28,7 +26,6 @@ const pinLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-// -------------------------------------
 
 function readReservations() {
   try {
@@ -85,7 +82,6 @@ function normalizeStr(str) {
     .trim();
 }
 
-// Función para sanitizar campos de texto (eliminar etiquetas HTML básicas / scripts)
 function sanitizeText(str) {
   if (!str) return '';
   return String(str)
@@ -93,7 +89,6 @@ function sanitizeText(str) {
     .trim();
 }
 
-// Función auxiliar para obtener el rango de la semana (Lunes a Domingo) de una fecha
 function getWeekRange(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   const day = d.getDay();
@@ -109,12 +104,10 @@ function getWeekRange(dateStr) {
   return { start: monday, end: sunday };
 }
 
-// Endpoint público para consultar los días bloqueados
 router.get('/blocked-days', (req, res) => {
   res.json(readBlockedDays());
 });
 
-// GET /api/reservations
 router.get('/', (req, res) => {
   try {
     let reservations = readReservations();
@@ -140,7 +133,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/reservations (Protegido con rate limiters)
+// POST /api/reservations
 router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -152,7 +145,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
-    // Sanitización y validación estricta de Nombre y Apellido
     const cleanNombre = sanitizeText(nombre);
     const cleanApellido = sanitizeText(apellido);
 
@@ -163,7 +155,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'El apellido es obligatorio y debe tener entre 2 y 50 caracteres.' });
     }
 
-    // Validar si el día está bloqueado
     const blockedDays = readBlockedDays();
     const blockInfo = blockedDays.find(b => b.date === String(date).trim());
     if (blockInfo) {
@@ -192,7 +183,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
-    // Validación estricta: PIN obligatorio, numérico y coincidente
     if (!providedPin || !/^\d+$/.test(providedPin) || storedPin !== providedPin) {
       return res.status(400).json({ error: 'El PIN debe ser numérico y es incorrecto o está vacío.' });
     }
@@ -209,7 +199,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return u === unitIdentifier || (unitUnidad && u === unitUnidad) || (unitId && u === unitId);
     };
 
-    // --- 1. VALIDACIÓN DE ANTICIPACIÓN ---
     const maxDiasAnticipacion = Number(config.dias_anticipacion_max) || 60;
     const minDiasAnticipacion = Number(config.dias_anticipacion_min) || 0;
 
@@ -227,9 +216,7 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     if (diferenciaDias < minDiasAnticipacion) {
       return res.status(400).json({ error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` });
     }
-    // ------------------------------------
 
-    // --- 2. VALIDACIÓN DE LÍMITE SEMANAL ---
     const maxReservasSemana = Number(config.max_reservas_semana) || 1;
     const { start: weekStart, end: weekEnd } = getWeekRange(date);
 
@@ -245,9 +232,7 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
         error: `Has superado el límite de reservas permitidas para esta semana (${maxReservasSemana} por semana).` 
       });
     }
-    // --------------------------------------
 
-    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL ---
     const maxReservasMes = Number(config.max_reservas_mes) || 4;
     const targetDateObj = new Date(date + 'T00:00:00');
     const targetYear = targetDateObj.getFullYear();
@@ -266,7 +251,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
         error: `Has superado el límite de reservas permitidas para este mes (${maxReservasMes} por mes).` 
       });
     }
-    // --------------------------------------
 
     const occupied = reservations.some(r => {
       if (!r) return false;
@@ -299,6 +283,9 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     reservations.push(newReservation);
     writeReservations(reservations);
 
+    // --- REGISTRAR EN AUDITORÍA ---
+    db.auditLogs.add('RESERVA_CREADA', `Unidad ${unitIdentifier} reservó el día ${date} (${turno}) a nombre de ${cleanNombre} ${cleanApellido}`, `Unidad ${unitIdentifier}`);
+
     res.json({ ok: true, success: true, reservation: newReservation });
 
     if (targetUnit.email && targetUnit.email.includes('@')) {
@@ -325,7 +312,7 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
   }
 });
 
-// PUT /api/reservations/:id (Protegido con rate limiter de PIN)
+// PUT /api/reservations/:id
 router.put('/:id', pinLimiter, async (req, res) => {
   try {
     const { id } = req.params;
@@ -389,6 +376,10 @@ router.put('/:id', pinLimiter, async (req, res) => {
     };
 
     writeReservations(reservations);
+
+    // --- REGISTRAR EN AUDITORÍA ---
+    db.auditLogs.add('RESERVA_MODIFICADA', `Unidad ${currentRes.unit_id} modificó la reserva (Nueva fecha: ${reservations[index].date}, Turno: ${reservations[index].turno})`, `Unidad ${currentRes.unit_id}`);
+
     res.json({ ok: true, success: true, reservation: reservations[index] });
   } catch (err) {
     console.error('Error al actualizar reserva:', err);
@@ -396,7 +387,7 @@ router.put('/:id', pinLimiter, async (req, res) => {
   }
 });
 
-// DELETE /api/reservations/:id (Protegido con rate limiter de PIN)
+// DELETE /api/reservations/:id
 router.delete('/:id', pinLimiter, (req, res) => {
   try {
     const { id } = req.params;
@@ -420,6 +411,10 @@ router.delete('/:id', pinLimiter, (req, res) => {
 
     const filtered = reservations.filter(r => String(r.id) !== String(id));
     writeReservations(filtered);
+
+    // --- REGISTRAR EN AUDITORÍA ---
+    db.auditLogs.add('RESERVA_CANCELADA', `Se canceló la reserva de la Unidad ${reservation.unit_id} para el día ${reservation.date} (${reservation.turno})`, `Unidad ${reservation.unit_id}`);
+
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
   } catch (err) {
     console.error('Error al eliminar reserva:', err);
