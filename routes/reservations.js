@@ -141,11 +141,34 @@ router.post('/', async (req, res) => {
     }
 
     let reservations = readReservations();
+    const config = readConfig();
+
+    // --- VALIDACIÓN DE ANTICIPACIÓN (MÁXIMA Y MÍNIMA) ---
+    const maxDiasAnticipacion = Number(config.dias_anticipacion_max) || 60;
+    const minDiasAnticipacion = Number(config.dias_anticipacion_min) || 0;
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaReserva = new Date(date + 'T00:00:00');
+    
+    const diferenciaTiempo = fechaReserva.getTime() - hoy.getTime();
+    const diferenciaDias = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+
+    if (diferenciaDias > maxDiasAnticipacion) {
+      return res.status(400).json({ 
+        error: `No se puede reservar con más de ${maxDiasAnticipacion} días de anticipación.` 
+      });
+    }
+
+    if (diferenciaDias < minDiasAnticipacion) {
+      return res.status(400).json({ 
+        error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` 
+      });
+    }
+    // ----------------------------------------------------
 
     // --- VALIDACIÓN DE LÍMITE DE RESERVAS POR MES ---
-    const config = readConfig();
     const maxReservasMes = Number(config.max_reservas_mes) || 1;
-    
     const targetMonthYear = String(date).trim().slice(0, 7);
     const unitIdentifier = String(targetUnit.unidad || targetUnit.id).trim();
 
