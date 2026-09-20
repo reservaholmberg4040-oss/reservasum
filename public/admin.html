@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    /* Forzado de estética original del Header y Cards */
     .header {
       background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
       color: white !important;
@@ -46,7 +45,6 @@
     .form-group { margin-bottom: 12px; }
     .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
     .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-    .action-btn-group { display: flex; gap: 6px; }
     .btn-xs { padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
     .btn-xs:hover { background: #f1f5f9; }
   </style>
@@ -65,6 +63,23 @@
 
   <div class="container" style="max-width: 1200px; margin: 30px auto; padding: 0 15px;">
     <main class="main">
+      <!-- Gestión de Días Bloqueados (Mantenimiento del SUM) -->
+      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); margin-bottom: 24px;">
+        <div class="admin-card-header">
+          <h2>Gestión de Días Bloqueados</h2>
+          <p>Bloqueá fechas completas por mantenimiento del SUM u otros motivos para que no se puedan reservar.</p>
+        </div>
+        <form id="blockDayForm" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+          <input type="date" id="blockDate" required style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          <input type="text" id="blockReason" placeholder="Motivo (ej. Mantenimiento del SUM)" required style="flex: 1; min-width: 220px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          <button type="submit" class="btn btn-danger">Bloquear Día</button>
+        </form>
+        <h4 style="margin-top: 20px; font-size: 1rem; color: #374151;">Días actualmente bloqueados:</h4>
+        <ul id="blockedDaysList" style="list-style: none; padding: 0; margin-top: 10px;">
+          <!-- Se completa por JS -->
+        </ul>
+      </section>
+
       <!-- Informes Mensuales -->
       <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); margin-bottom: 24px;">
         <div class="admin-card-header">
