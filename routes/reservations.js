@@ -46,12 +46,12 @@ function readBlockedDays() {
 function readConfig() {
   try {
     if (!fs.existsSync(configFile)) {
-      return { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+      return { max_reservas_mes: 4, max_reservas_semana: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
     }
     const data = fs.readFileSync(configFile, 'utf8');
     return JSON.parse(data);
   } catch (err) {
-    return { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+    return { max_reservas_mes: 4, max_reservas_semana: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
   }
 }
 
@@ -64,7 +64,23 @@ function normalizeStr(str) {
     .trim();
 }
 
-// Endpoint público para consultar los días bloqueados desde el frontend
+// Función auxiliar para obtener el rango de la semana (Lunes a Domingo) de una fecha
+function getWeekRange(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diffToMonday = d.getDate() - day + (day === 0 ? -6 : 1);
+  
+  const monday = new Date(d.setDate(diffToMonday));
+  monday.setHours(0, 0, 0, 0);
+  
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+  
+  return { start: monday, end: sunday };
+}
+
+// Endpoint público para consultar los días bloqueados
 router.get('/blocked-days', (req, res) => {
   res.json(readBlockedDays());
 });
@@ -107,7 +123,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
-    // Validar si el día está bloqueado por mantenimiento u otro motivo
+    // Validar si el día está bloqueado
     const blockedDays = readBlockedDays();
     const blockInfo = blockedDays.find(b => b.date === String(date).trim());
     if (blockInfo) {
@@ -143,7 +159,7 @@ router.post('/', async (req, res) => {
     let reservations = readReservations();
     const config = readConfig();
 
-    // --- VALIDACIÓN DE ANTICIPACIÓN (MÁXIMA Y MÍNIMA) ---
+    // --- 1. VALIDACIÓN DE ANTICIPACIÓN ---
     const maxDiasAnticipacion = Number(config.dias_anticipacion_max) || 60;
     const minDiasAnticipacion = Number(config.dias_anticipacion_min) || 0;
 
@@ -155,37 +171,54 @@ router.post('/', async (req, res) => {
     const diferenciaDias = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
 
     if (diferenciaDias > maxDiasAnticipacion) {
-      return res.status(400).json({ 
-        error: `No se puede reservar con más de ${maxDiasAnticipacion} días de anticipación.` 
-      });
+      return res.status(400).json({ error: `No se puede reservar con más de ${maxDiasAnticipacion} días de anticipación.` });
     }
 
     if (diferenciaDias < minDiasAnticipacion) {
-      return res.status(400).json({ 
-        error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` 
-      });
+      return res.status(400).json({ error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` });
     }
-    // ----------------------------------------------------
+    // ------------------------------------
 
-    // --- VALIDACIÓN DE LÍMITE DE RESERVAS POR MES ---
-    const maxReservasMes = Number(config.max_reservas_mes) || 1;
-    const targetMonthYear = String(date).trim().slice(0, 7);
     const unitIdentifier = String(targetUnit.unidad || targetUnit.id).trim();
 
-    const reservasDelMesUsuario = reservations.filter(r => {
+    // --- 2. VALIDACIÓN DE LÍMITE SEMANAL ---
+    const maxReservasSemana = Number(config.max_reservas_semana) || 1;
+    const { start: weekStart, end: weekEnd } = getWeekRange(date);
+
+    const reservasDeLaSemana = reservations.filter(r => {
+      if (!r) return false;
+      const rUnit = String(r.unit_id || '').trim();
+      const rDateStr = String(r.date || '').trim();
+      const rDate = new Date(rDateStr + 'T00:00:00');
+      return rUnit === unitIdentifier && rDate >= weekStart && rDate <= weekEnd;
+    });
+
+    if (reservasDeLaSemana.length >= maxReservasSemana) {
+      return res.status(400).json({ 
+        error: `Has superado el límite de reservas permitidas para esta semana (${maxReservasSemana} por semana).` 
+      });
+    }
+    // --------------------------------------
+
+    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL ---
+    const maxReservasMes = Number(config.max_reservas_mes) || 4;
+    const targetMonthYear = String(date).trim().slice(0, 7);
+
+    const reservasDelMes = reservations.filter(r => {
       if (!r) return false;
       const rUnit = String(r.unit_id || '').trim();
       const rDate = String(r.date || '').trim();
       return rUnit === unitIdentifier && rDate.startsWith(targetMonthYear);
     });
 
-    if (reservasDelMesUsuario.length >= maxReservasMes) {
+    if (reservasDelMes.length >= maxReservasMes) {
       return res.status(400).json({ 
         error: `Has superado el límite de reservas permitidas para este mes (${maxReservasMes} por mes).` 
       });
     }
-    // ----------------------------------------------
+    // --------------------------------------
 
+    // Validar turno ocupado
     const occupied = reservations.some(r => {
       if (!r) return false;
       const rDate = String(r.date || '').trim();
@@ -262,9 +295,7 @@ router.put('/:id', async (req, res) => {
       const blockedDays = readBlockedDays();
       const blockInfo = blockedDays.find(b => b.date === String(date).trim());
       if (blockInfo) {
-        return res.status(400).json({ 
-          error: `No se puede mover la reserva a este día. Motivo: ${blockInfo.reason || 'Mantenimiento del SUM'}` 
-        });
+        return res.status(400).json({ error: `No se puede mover la reserva a este día. Motivo: ${blockInfo.reason || 'Mantenimiento'}` });
       }
     }
 
