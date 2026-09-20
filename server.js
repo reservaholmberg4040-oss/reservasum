@@ -35,7 +35,7 @@ app.get('/api/admin/config', async (req, res) => {
   try {
     const configFile = path.join(__dirname, 'data', 'config.json');
 
-    let config = { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+    let config = { max_reservas_mes: 1, max_reservas_semana: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
     if (fs.existsSync(configFile)) {
       config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
     }
@@ -44,6 +44,7 @@ app.get('/api/admin/config', async (req, res) => {
       success: true, 
       config: {
         max_reservas_mes: config.max_reservas_mes ?? 1,
+        max_reservas_semana: config.max_reservas_semana ?? 1,
         dias_anticipacion_max: config.dias_anticipacion_max ?? 60,
         dias_anticipacion_min: config.dias_anticipacion_min ?? 0
       } 
@@ -56,7 +57,7 @@ app.get('/api/admin/config', async (req, res) => {
 
 app.post('/api/admin/config', async (req, res) => {
   try {
-    const { max_reservas_mes, dias_anticipacion_max, dias_anticipacion_min } = req.body;
+    const { max_reservas_mes, max_reservas_semana, dias_anticipacion_max, dias_anticipacion_min } = req.body;
     
     const dataDir = path.join(__dirname, 'data');
     const configFile = path.join(dataDir, 'config.json');
@@ -67,6 +68,7 @@ app.post('/api/admin/config', async (req, res) => {
 
     const configData = {
       max_reservas_mes: Number(max_reservas_mes),
+      max_reservas_semana: Number(max_reservas_semana),
       dias_anticipacion_max: Number(dias_anticipacion_max),
       dias_anticipacion_min: Number(dias_anticipacion_min)
     };
@@ -97,3 +99,4 @@ app.listen(PORT, () => {
   console.log(`Servidor SUM Holmberg 4040 corriendo en http://localhost:${PORT}`);
   scheduleMonthlyReport();
 });
+```[cite: 3]
