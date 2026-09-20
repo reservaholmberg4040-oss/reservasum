@@ -12,6 +12,7 @@ const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
+const reservationsFile = path.join(__dirname, '../data/reservations.json');
 
 function readBlockedDays() {
   try {
@@ -36,12 +37,23 @@ function writeBlockedDays(data) {
   }
 }
 
+function readReservations() {
+  try {
+    if (!fs.existsSync(reservationsFile)) return [];
+    const data = fs.readFileSync(reservationsFile, 'utf8');
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
 function requireAdmin(req, res, next) {
   if (req.session && req.session.isAdmin) return next();
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
-// --- Endpoints para Días Bloqueados ---
+// --- Endpoints para Días Bloqueados con Validación de Reservas ---
 router.get('/blocked-days', requireAdmin, (req, res) => {
   res.json(readBlockedDays());
 });
@@ -49,6 +61,17 @@ router.get('/blocked-days', requireAdmin, (req, res) => {
 router.post('/blocked-days', requireAdmin, (req, res) => {
   const { date, reason } = req.body;
   if (!date) return res.status(400).json({ error: 'La fecha es obligatoria.' });
+
+  // Verificar si hay reservas para esta fecha antes de bloquear
+  const reservations = readReservations();
+  const existingRes = reservations.filter(r => r && String(r.date).trim() === String(date).trim());
+
+  if (existingRes.length > 0) {
+    const detalles = existingRes.map(r => `Turno ${r.turno} (Unidad ${r.unit_id})`).join(', ');
+    return res.status(400).json({ 
+      error: `No se puede bloquear el día ${date} porque tiene reservas activas: ${detalles}. Debes cancelar o gestionar estas reservas primero.` 
+    });
+  }
 
   let blocked = readBlockedDays();
   blocked = blocked.filter(b => b.date !== date);
@@ -66,7 +89,7 @@ router.delete('/blocked-days/:date', requireAdmin, (req, res) => {
 
   res.json({ success: true, message: 'Bloqueo removido.' });
 });
-// -------------------------------------
+// -------------------------------------------------------------------
 
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -104,11 +127,6 @@ router.get('/me', (req, res) => {
 router.get('/dashboard', requireAdmin, (req, res) => {
   try {
     const period = req.query.period || new Date().toISOString().slice(0, 7);
-    
-    if (typeof buildMonthlyReport !== 'function') {
-      throw new Error('Módulo de reportes no disponible.');
-    }
-
     const reportResult = buildMonthlyReport(period) || {};
     const totalsByUnit = reportResult.totalsByUnit || [];
     const rows = reportResult.rows || [];
@@ -195,7 +213,7 @@ router.put('/units/:id/email', requireAdmin, (req, res) => {
 router.put('/units/:id/baja', requireAdmin, (req, res) => {
   const { baja } = req.body;
   if (typeof baja !== 'boolean') {
-    return res.status(400).json({ error: 'El estado de baja debe ser un valor booleano (true/false).' });
+    return res.status(400).json({ error: 'El estado de baja debe ser un valor booleano.' });
   }
   const unit = (db.units && typeof db.units.setBaja === 'function') ? db.units.setBaja(req.params.id, baja) : null;
   if (!unit) return res.status(404).json({ error: 'Unidad no encontrada.' });
@@ -232,7 +250,6 @@ router.post('/units/add', requireAdmin, (req, res) => {
     
     res.json({ success: true, unit: newUnit });
   } catch (err) {
-    console.error('Error al agregar unidad:', err);
     res.status(500).json({ error: 'Error al intentar guardar la unidad.' });
   }
 });
@@ -253,7 +270,7 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
         piso: String(row['Piso'] || row['piso'] || 'PB'),
         depto: String(row['Depto'] || row['depto'] || row['DTO'] || 'A'),
         propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
-        email: String(row['Email'] || row['email'] || row['Correo'] || row['correo'] || '').trim(),
+        email: String(row['Email'] || row['email'] || '').trim(),
         pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
         baja: false
       };
@@ -266,14 +283,12 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     }
     
     const mergedUnits = [...(Array.isArray(currentUnits) ? currentUnits : []), ...importedUnits];
-
     if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(mergedUnits);
     }
 
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
   } catch (err) {
-    console.error('Error al procesar la planilla Excel:', err);
     res.status(500).json({ error: 'Error al procesar la planilla Excel.' });
   }
 });
@@ -297,7 +312,6 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
 
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
-    console.error('Error al eliminar unidades:', err);
     res.status(500).json({ error: 'Error al eliminar unidades.' });
   }
 });
