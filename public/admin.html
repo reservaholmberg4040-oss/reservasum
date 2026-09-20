@@ -4,8 +4,50 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel de Administración</title>
-  <!-- Tu hoja de estilos original recuperada -->
+  <!-- Hoja de estilos original -->
   <link rel="stylesheet" href="/css/admin.css">
+  
+  <!-- Estilos de corrección rápida para asegurar la alineación -->
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 20px; }
+    .admin-container { max-width: 1200px; margin: 0 auto; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .admin-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    
+    /* Formularios y controles en línea */
+    .block-day-form, .reports-controls, .excel-import-box { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px; }
+    .form-group { display: flex; flexDirection: column; }
+    .form-group label { font-size: 0.85rem; margin-bottom: 4px; font-weight: 500; color: #4b5563; }
+    .form-group input { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
+    .flex-grow { flex: 1; min-width: 200px; }
+    
+    /* Botones */
+    .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: white; }
+    .btn-primary { background: #4f46e5; }
+    .btn-secondary { background: #6b7280; }
+    .btn-success { background: #10b981; }
+    .btn-danger { background: #ef4444; }
+    .btn-danger-dark { background: #991b1b; }
+    .btn-info { background: #0ea5e9; }
+    
+    /* Tablas */
+    .table-responsive { overflow-x: auto; }
+    .admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+    .admin-table th, .admin-table td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
+    .admin-table th { background: #f9fafb; font-weight: 600; }
+    .text-center { text-align: center; }
+    
+    /* Cabecera de secciones */
+    .section-header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+    .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    
+    /* Modales */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .form-row { display: flex; gap: 10px; margin-bottom: 12px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .font-mono { font-family: monospace; }
+  </style>
 </head>
 <body>
 
@@ -26,13 +68,13 @@
         </div>
         <div class="form-group flex-grow">
           <label for="blockReason">Motivo:</label>
-          <input type="text" id="blockReason" placeholder="Ej. Mantenimiento general" required>
+          <input type="text" id="blockReason" placeholder="Ej. Mantenimiento general" required style="width: 100%; box-sizing: border-box;">
         </div>
         <button type="submit" class="btn btn-primary">Bloquear Día</button>
       </form>
       
       <h3>Días actualmente bloqueados</h3>
-      <ul id="blockedDaysList" class="blocked-days-list">
+      <ul id="blockedDaysList" style="list-style: none; padding: 0; margin-top: 10px;">
         <!-- Se llena dinámicamente -->
       </ul>
     </section>
@@ -78,9 +120,9 @@
       </div>
 
       <!-- Importación por Excel -->
-      <div class="excel-import-box">
+      <div class="excel-import-box" style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
         <input type="file" id="excel-file-input" accept=".xlsx, .xls">
-        <label class="checkbox-label">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
           <input type="checkbox" id="chk-replace-all"> Reemplazar base actual
         </label>
         <button id="btn-upload-excel" class="btn btn-primary">Importar Excel</button>
@@ -91,7 +133,7 @@
         <table class="admin-table">
           <thead>
             <tr>
-              <th class="col-checkbox"><input type="checkbox" id="select-all-units"></th>
+              <th style="text-align: center; width: 40px;"><input type="checkbox" id="select-all-units"></th>
               <th>Unidad</th>
               <th>Piso/Dto</th>
               <th>Propietario</th>
@@ -113,33 +155,33 @@
   <!-- Modal para Agregar Unidad -->
   <div id="add-unit-modal" class="modal">
     <div class="modal-content">
-      <h3>Agregar Nueva Unidad</h3>
+      <h3 style="margin-top: 0; margin-bottom: 15px;">Agregar Nueva Unidad</h3>
       <form id="add-unit-form">
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom: 12px;">
           <label>Unidad / Identificador:</label>
-          <input type="text" id="input-unidad" required>
+          <input type="text" id="input-unidad" required style="width: 100%; box-sizing: border-box;">
         </div>
         <div class="form-row">
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
             <label>Piso:</label>
-            <input type="text" id="input-piso">
+            <input type="text" id="input-piso" style="width: 100%; box-sizing: border-box;">
           </div>
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
             <label>Departamento:</label>
-            <input type="text" id="input-dto">
+            <input type="text" id="input-dto" style="width: 100%; box-sizing: border-box;">
           </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom: 12px;">
           <label>Propietario:</label>
-          <input type="text" id="input-propietario" required>
+          <input type="text" id="input-propietario" required style="width: 100%; box-sizing: border-box;">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom: 12px;">
           <label>Correo electrónico:</label>
-          <input type="email" id="input-email">
+          <input type="email" id="input-email" style="width: 100%; box-sizing: border-box;">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="margin-bottom: 20px;">
           <label>PIN (4 dígitos):</label>
-          <input type="text" id="input-pin" maxlength="4" placeholder="Dejar en blanco para autogenerar" class="font-mono">
+          <input type="text" id="input-pin" maxlength="4" placeholder="Dejar en blanco para autogenerar" class="font-mono" style="width: 100%; box-sizing: border-box;">
         </div>
         <div class="modal-actions">
           <button type="button" id="btn-close-modal" class="btn btn-secondary">Cancelar</button>
