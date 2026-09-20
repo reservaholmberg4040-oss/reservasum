@@ -3,212 +3,172 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin — SUM Holmberg 4040</title>
-  <link rel="stylesheet" href="/style.css">
-  <link rel="stylesheet" href="/css/style.css">
-  <style>
-    .header {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-      color: white !important;
-      padding: 1.5rem 2rem !important;
-      display: flex !important;
-      justify-content: space-between !important;
-      align-items: center !important;
-    }
-    .header h1 { color: white !important; margin: 0 !important; font-size: 1.5rem !important; }
-    .header p { color: rgba(255,255,255,0.8) !important; margin: 0 !important; }
-    
-    .actions-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
-    .excel-card {
-      background: #f8f9fa;
-      border: 1px dashed #cbd5e1;
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5);
-      align-items: center; justify-content: center;
-      z-index: 2000;
-    }
-    .modal.active { display: flex; }
-    .modal-content {
-      background: #fff;
-      padding: 24px;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 450px;
-    }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
-    .form-group input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; }
-    .btn-xs { padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
-    .btn-xs:hover { background: #f1f5f9; }
-  </style>
+  <title>Panel de Administración</title>
+  <!-- Estilos generales de tu panel -->
+  <link rel="stylesheet" href="/css/admin.css">
 </head>
-<body class="bg">
-  <header class="header">
-    <div>
+<body>
+
+  <!-- Contenedor principal de administración -->
+  <div class="admin-container">
+    <header class="admin-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h1>Panel de Administración</h1>
-      <p>Holmberg 4040</p>
-    </div>
-    <div style="display: flex; gap: 10px;">
-      <a href="/" class="btn btn-ghost" style="color: white; border-color: rgba(255,255,255,0.4);">Ver calendario público</a>
-      <button id="logout-btn" class="btn btn-ghost" type="button" style="color: white; border-color: rgba(255,255,255,0.4);">Cerrar sesión</button>
-    </div>
-  </header>
+      <button id="logout-btn" class="btn btn-secondary">Cerrar Sesión</button>
+    </header>
 
-  <div class="container" style="max-width: 1200px; margin: 30px auto; padding: 0 15px;">
-    <main class="main">
-      <!-- Gestión de Días Bloqueados (Mantenimiento del SUM) -->
-      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); margin-bottom: 24px;">
-        <div class="admin-card-header">
-          <h2>Gestión de Días Bloqueados</h2>
-          <p>Bloqueá fechas completas por mantenimiento del SUM u otros motivos para que no se puedan reservar.</p>
+    <!-- Sección de Bloqueo de Días -->
+    <section class="admin-section" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+      <h2>Bloquear Días del Calendario</h2>
+      <form id="blockDayForm" style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+        <div>
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Fecha:</label>
+          <input type="date" id="blockDate" required style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
         </div>
-        <form id="blockDayForm" style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
-          <input type="date" id="blockDate" required style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
-          <input type="text" id="blockReason" placeholder="Motivo (ej. Mantenimiento del SUM)" required style="flex: 1; min-width: 220px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
-          <button type="submit" class="btn btn-danger">Bloquear Día</button>
-        </form>
-        <h4 style="margin-top: 20px; font-size: 1rem; color: #374151;">Días actualmente bloqueados:</h4>
-        <ul id="blockedDaysList" style="list-style: none; padding: 0; margin-top: 10px;">
-          <!-- Se completa por JS -->
-        </ul>
-      </section>
+        <div style="flex: 1; min-width: 200px;">
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Motivo:</label>
+          <input type="text" id="blockReason" placeholder="Ej. Mantenimiento general" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding: 8px 16px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer;">Bloquear Día</button>
+      </form>
+      
+      <h3>Días actualmente bloqueados</h3>
+      <ul id="blockedDaysList" style="list-style: none; padding: 0; margin: 0;">
+        <!-- Se llena dinámicamente -->
+      </ul>
+    </section>
 
-      <!-- Informes Mensuales -->
-      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08); margin-bottom: 24px;">
-        <div class="admin-card-header">
-          <h2>Informes mensuales</h2>
-          <p>Generá y enviá por mail el resumen de reservas del mes para la administración.</p>
+    <!-- Sección de Reportes -->
+    <section class="admin-section" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+      <h2>Informes Mensuales</h2>
+      <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+        <div>
+          <label style="font-size: 0.85rem; margin-right: 5px;">Período:</label>
+          <input type="month" id="month-select" style="padding: 6px; border: 1px solid #ccc; border-radius: 4px;">
         </div>
-        <form id="report-form" class="report-form" style="margin-top: 15px;">
-          <div class="form-row" style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-            <div class="field" style="flex: 1;">
-              <label for="month-select">Período</label>
-              <input type="month" id="month-select" name="period" required>
-            </div>
-            <div class="field" style="flex: 2;">
-              <label for="recipient-email">Email destinatario</label>
-              <input type="email" id="recipient-email" name="recipient" placeholder="ejemplo@administracion.com" required>
-            </div>
-          </div>
-          <div class="form-actions" style="display: flex; gap: 10px;">
-            <button type="submit" id="btn-send-report" class="btn btn-primary">Enviar informe por mail</button>
-            <button type="button" id="btn-download-pdf" class="btn btn-secondary">Descargar Excel</button>
-          </div>
-        </form>
-        <div class="report-history" style="margin-top: 20px;">
-          <h3>Historial de envíos</h3>
-          <div class="table-wrap">
-            <table class="data-table" style="width: 100%; border-collapse: collapse;">
-              <thead>
-                <tr>
-                  <th>PERÍODO</th>
-                  <th>ENVIADO</th>
-                  <th>DESTINATARIO</th>
-                  <th>ESTADO</th>
-                </tr>
-              </thead>
-              <tbody id="history-tbody">
-                <tr><td colspan="4" class="text-muted">Todavía no se envió ningún informe</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+        <button id="btn-download-pdf" class="btn" style="padding: 6px 12px; background: #0ea5e9; color: white; border: none; border-radius: 4px; cursor: pointer;">Descargar PDF del Mes</button>
+      </div>
 
-      <!-- Unidades: Propietario y PIN -->
-      <section class="card admin-card" style="background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.08);">
-        <div class="admin-card-header">
-          <h2>Unidades: propietario y PIN</h2>
-          <p>Cada unidad usa un PIN de 4 dígitos para reservar y para editar/cancelar sus reservas desde "Mis reservas".</p>
-        </div>
+      <h3>Historial de Envíos</h3>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+              <th style="padding: 8px;">Período</th>
+              <th style="padding: 8px;">Fecha de Envío</th>
+              <th style="padding: 8px;">Destinatario</th>
+              <th style="padding: 8px;">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <!-- Se llena dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-        <div class="actions-bar" style="margin-top: 15px;">
-          <button id="btn-open-add-modal" class="btn btn-primary" type="button">+ Agregar Unidad</button>
-          <button id="btn-delete-selected" class="btn btn-warning" type="button">Eliminar Seleccionadas</button>
-          <button id="btn-delete-all" class="btn btn-danger" type="button">Eliminar TODAS las Unidades</button>
+    <!-- Sección de Gestión de Unidades -->
+    <section class="admin-section" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+        <h2>Gestión de Unidades</h2>
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-open-add-modal" class="btn" style="padding: 8px 12px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Nueva Unidad</button>
+          <button id="btn-delete-selected" class="btn" style="padding: 8px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">Eliminar Seleccionadas</button>
+          <button id="btn-delete-all" class="btn" style="padding: 8px 12px; background: #991b1b; color: white; border: none; border-radius: 4px; cursor: pointer;">Eliminar Todas</button>
         </div>
+      </div>
 
-        <div class="excel-card">
-          <h3 style="margin-top: 0; font-size: 1rem;">Importar desde Excel</h3>
-          <p><small>Columnas aceptadas: <strong>Unidad</strong>, <strong>Piso</strong>, <strong>Depto</strong>, <strong>Propietario</strong>, <strong>Email</strong>, <strong>PIN</strong>.</small></p>
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
-            <input type="file" id="excel-file-input" accept=".xlsx, .xls">
-            <label style="cursor: pointer; font-size: 0.9rem;">
-              <input type="checkbox" id="chk-replace-all"> Reemplazar todas las unidades actuales
-            </label>
-            <button id="btn-upload-excel" class="btn btn-success" type="button">Cargar Excel</button>
-          </div>
-        </div>
+      <!-- Importación por Excel -->
+      <div style="background: #f9fafb; padding: 12px; border-radius: 6px; margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border: 1px solid #e5e7eb;">
+        <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="font-size: 0.9rem;">
+        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="chk-replace-all"> Reemplazar base actual
+        </label>
+        <button id="btn-upload-excel" class="btn" style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">Importar Excel</button>
+      </div>
 
-        <div class="table-wrap">
-          <table class="data-table" style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr>
-                <th style="width: 40px; text-align: center;">
-                  <input type="checkbox" id="select-all-units">
-                </th>
-                <th>UNIDAD</th>
-                <th>PISO/DTO</th>
-                <th>PROPIETARIO</th>
-                <th>EMAIL</th>
-                <th>PIN</th>
-                <th>ACCIONES</th>
-                <th style="color: #dc2626; font-weight: bold; text-align: center;">BAJA</th>
-              </tr>
-            </thead>
-            <tbody id="units-tbody">
-              <tr><td colspan="8" class="text-muted" style="text-align: center;">Cargando unidades...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
+      <!-- Tabla de Unidades -->
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid #e5e7eb;">
+              <th style="padding: 8px; text-align: center; width: 40px;"><input type="checkbox" id="select-all-units"></th>
+              <th style="padding: 8px;">Unidad</th>
+              <th style="padding: 8px;">Piso/Dto</th>
+              <th style="padding: 8px;">Propietario</th>
+              <th style="padding: 8px;">Email</th>
+              <th style="padding: 8px; text-align: center;">PIN</th>
+              <th style="padding: 8px;">Acción PIN</th>
+              <th style="padding: 8px; text-align: center;">Baja</th>
+            </tr>
+          </thead>
+          <tbody id="units-tbody">
+            <!-- Se llena dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </div>
 
-  <!-- Modal Agregar Unidad -->
-  <div id="add-unit-modal" class="modal">
-    <div class="modal-content">
-      <h3>Agregar Nueva Unidad</h3>
-      <form id="add-unit-form" style="margin-top: 15px;">
-        <div class="form-group">
-          <label for="input-unidad">Unidad / N°</label>
-          <input type="text" id="input-unidad" required placeholder="Ej: 0001">
+  <!-- Modal para Agregar Unidad -->
+  <div id="add-unit-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000;">
+    <div style="background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+      <h3 style="margin-top: 0; margin-bottom: 15px;">Agregar Nueva Unidad</h3>
+      <form id="add-unit-form">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Unidad / Identificador:</label>
+          <input type="text" id="input-unidad" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
         </div>
-        <div class="form-group">
-          <label for="input-piso">Piso</label>
-          <input type="text" id="input-piso" required placeholder="Ej: PB o 1">
+        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Piso:</label>
+            <input type="text" id="input-piso" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+          </div>
+          <div style="flex: 1;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Departamento:</label>
+            <input type="text" id="input-dto" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+          </div>
         </div>
-        <div class="form-group">
-          <label for="input-dto">Depto</label>
-          <input type="text" id="input-dto" required placeholder="Ej: LOCAL o A">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Propietario:</label>
+          <input type="text" id="input-propietario" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
         </div>
-        <div class="form-group">
-          <label for="input-propietario">Propietario</label>
-          <input type="text" id="input-propietario" required placeholder="Ej: LINARES, EDUARDO">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">Correo electrónico:</label>
+          <input type="email" id="input-email" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
         </div>
-        <div class="form-group">
-          <label for="input-email">Correo Electrónico</label>
-          <input type="email" id="input-email" placeholder="ejemplo@correo.com">
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 4px;">PIN (4 dígitos):</label>
+          <input type="text" id="input-pin" maxlength="4" placeholder="Dejar en blanco para autogenerar" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: monospace;">
         </div>
-        <div class="form-group">
-          <label for="input-pin">PIN (Opcional - 4 dígitos)</label>
-          <input type="text" id="input-pin" maxlength="4" placeholder="Ej: 5456 (vacío = automático)">
-        </div>
-        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-          <button type="button" id="btn-close-modal" class="btn btn-ghost">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Guardar</button>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" id="btn-close-modal" class="btn" style="padding: 8px 14px; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer;">Cancelar</button>
+          <button type="submit" class="btn" style="padding: 8px 14px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer;">Guardar Unidad</button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- CONTENEDOR PARA LAS NOTIFICACIONES FLOTANTES (TOASTS) -->
+  <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+
+  <!-- Script de administración -->
   <script src="/js/admin.js"></script>
+  
+  <!-- Script menor para manejar la visibilidad del modal desde el HTML si es necesario -->
+  <script>
+    const modalEl = document.getElementById('add-unit-modal');
+    if (modalEl) {
+      // Observer o lógica complementaria si se requiere para clases 'active'
+      const observer = new MutationObserver(() => {
+        if (modalEl.classList.contains('active')) {
+          modalEl.style.display = 'flex';
+        } else {
+          modalEl.style.display = 'none';
+        }
+      });
+      observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
+    }
+  </script>
 </body>
 </html>
