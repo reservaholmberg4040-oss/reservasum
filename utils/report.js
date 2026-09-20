@@ -3,29 +3,28 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Genera el informe mensual leyendo directamente del archivo JSON de reservas
- * para evitar cualquier fallo de abstracción en el módulo db.js.
+ * Genera el informe mensual leyendo directamente del archivo JSON de reservas correcto.
  * @param {string} period - El período a consultar en formato YYYY-MM (ej: "2026-09")
  */
 function buildMonthlyReport(period) {
   let allRows = [];
   
   try {
-    // 1. Leemos directamente el archivo db.json donde se guardan las reservas
-    const dbFilePath = path.join(__dirname, '../data/db.json');
+    // 1. Leemos directamente desde reservations.json que es donde se guardan las reservas
+    const reservationsFilePath = path.join(__dirname, '../data/reservations.json');
     
-    if (fs.existsSync(dbFilePath)) {
-      const fileContent = fs.readFileSync(dbFilePath, 'utf8');
+    if (fs.existsSync(reservationsFilePath)) {
+      const fileContent = fs.readFileSync(reservationsFilePath, 'utf8');
       const parsedData = JSON.parse(fileContent);
       
-      // Normalizamos a un array plano sin importar cómo esté estructurado
+      // Normalizamos a un array plano
       if (Array.isArray(parsedData)) {
         allRows = parsedData;
       } else if (parsedData && typeof parsedData === 'object') {
         allRows = Object.values(parsedData);
       }
     } else {
-      console.warn('[REPORT] No se encontró el archivo db.json en:', dbFilePath);
+      console.warn('[REPORT] No se encontró el archivo reservations.json en:', reservationsFilePath);
     }
 
     console.log(`[REPORT DEBUG] Total de reservas totales en la base de datos:`, allRows.length);
@@ -35,10 +34,7 @@ function buildMonthlyReport(period) {
     allRows = allRows.filter(r => {
       if (!r || typeof r !== 'object') return false;
       
-      // Verificamos en los campos donde se almacena la fecha de la reserva
       const fechaReserva = String(r.date || r.fecha || r.day || '');
-      
-      // Si la fecha comienza con el período (ej: "2026-09-15" empieza con "2026-09")
       return fechaReserva.startsWith(period) || fechaReserva.includes(period);
     });
 
