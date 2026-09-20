@@ -243,7 +243,7 @@ router.post('/', async (req, res) => {
 
     const deptoVal = targetUnit.depto || targetUnit.dto || '';
 
-    const newReservation = {
+   const newReservation = {
       id: Date.now().toString(),
       unit_id: unitIdentifier,
       piso: String(targetUnit.piso || ''),
@@ -254,7 +254,7 @@ router.post('/', async (req, res) => {
       apellido: String(apellido || '').trim(),
       date: String(date).trim(),
       turno: String(turno).trim(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).replace(' ', 'T') + '-03:00' // <--- Forzado a hora de Argentina (UTC-3)
     };
 
     reservations.push(newReservation);
