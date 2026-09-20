@@ -56,7 +56,7 @@ function requireAdmin(req, res, next) {
 // --- Endpoint para obtener las reservas del mes para el Calendario del Admin ---
 router.get('/calendar-data', requireAdmin, (req, res) => {
   try {
-    const { year, month } = req.query; // Espera año y mes (ej: year=2026, month=09)
+    const { year, month } = req.query;
     const reservations = readReservations();
     const blockedDays = readBlockedDays();
 
@@ -77,6 +77,61 @@ router.get('/calendar-data', requireAdmin, (req, res) => {
   }
 });
 
+// --- Endpoints de Logs de Auditoría con Filtros de Fecha ---
+router.get('/audit-logs', requireAdmin, (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let logs = db.auditLogs.all();
+
+    if (startDate) {
+      logs = logs.filter(l => l.timestamp.slice(0, 10) >= startDate);
+    }
+    if (endDate) {
+      logs = logs.filter(l => l.timestamp.slice(0, 10) <= endDate);
+    }
+
+    res.json({ success: true, logs });
+  } catch (err) {
+    console.error('Error al obtener logs:', err);
+    res.status(500).json({ error: 'Error interno al obtener los logs.' });
+  }
+});
+
+router.get('/audit-logs/download', requireAdmin, (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    let logs = db.auditLogs.all();
+
+    if (startDate) {
+      logs = logs.filter(l => l.timestamp.slice(0, 10) >= startDate);
+    }
+    if (endDate) {
+      logs = logs.filter(l => l.timestamp.slice(0, 10) <= endDate);
+    }
+
+    const rows = logs.map(l => ({
+      'Fecha / Hora': l.timestamp,
+      'Usuario / Actor': l.user,
+      'Acción': l.action,
+      'Detalle': l.details
+    }));
+
+    const worksheet = xlsx.utils.json_to_sheet(rows);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Auditoria');
+
+    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Auditoria_SUM_${new Date().toISOString().slice(0,10)}.xlsx"`);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('Error al descargar excel de logs:', err);
+    res.status(500).json({ error: 'Error al generar la descarga de logs.' });
+  }
+});
+// ------------------------------------------------------------
+
 // --- Endpoints para Días Bloqueados con Validación de Reservas ---
 router.get('/blocked-days', requireAdmin, (req, res) => {
   res.json(readBlockedDays());
@@ -86,21 +141,23 @@ router.post('/blocked-days', requireAdmin, (req, res) => {
   const { date, reason } = req.body;
   if (!date) return res.status(400).json({ error: 'La fecha es obligatoria.' });
 
-  // Verificar si hay reservas para esta fecha antes de bloquear
   const reservations = readReservations();
   const existingRes = reservations.filter(r => r && String(r.date).trim() === String(date).trim());
 
   if (existingRes.length > 0) {
     const detalles = existingRes.map(r => `Turno ${r.turno} (Unidad ${r.unit_id})`).join(', ');
     return res.status(400).json({ 
-      error: `No se puede bloquear el día ${date} porque tiene reservas activas: ${detalles}. Debes cancelar o gestionar estas reservas primero.` 
+      error: `No se puede bloquear el día ${date} porque tiene reservas activas: ${detalles}.` 
     });
   }
 
   let blocked = readBlockedDays();
   blocked = blocked.filter(b => b.date !== date);
-  blocked.push({ date, reason: reason ? String(reason).trim() : 'Mantenimiento del SUM' });
+  const motivo = reason ? String(reason).trim() : 'Mantenimiento del SUM';
+  blocked.push({ date, reason: motivo });
   writeBlockedDays(blocked);
+
+  db.auditLogs.add('BLOQUEAR_DIA', `Se bloqueó el día ${date}. Motivo: ${motivo}`, req.session.username || 'Admin');
 
   res.json({ success: true, message: 'Día bloqueado correctamente.' });
 });
@@ -110,6 +167,8 @@ router.delete('/blocked-days/:date', requireAdmin, (req, res) => {
   let blocked = readBlockedDays();
   blocked = blocked.filter(b => b.date !== date);
   writeBlockedDays(blocked);
+
+  db.auditLogs.add('DESBLOQUEAR_DIA', `Se removió el bloqueo del día ${date}`, req.session.username || 'Admin');
 
   res.json({ success: true, message: 'Bloqueo removido.' });
 });
@@ -123,6 +182,7 @@ router.post('/login', (req, res) => {
   if (username === envUser && password === envPass) {
     req.session.isAdmin = true;
     req.session.username = envUser;
+    db.auditLogs.add('LOGIN_ADMIN', `Inicio de sesión exitoso`, envUser);
     return res.json({ ok: true, username: envUser });
   }
 
@@ -130,6 +190,7 @@ router.post('/login', (req, res) => {
   if (adminUser && bcrypt.compareSync(password || '', adminUser.password_hash)) {
     req.session.isAdmin = true;
     req.session.username = adminUser.username;
+    db.auditLogs.add('LOGIN_ADMIN', `Inicio de sesión exitoso`, adminUser.username);
     return res.json({ ok: true, username: adminUser.username });
   }
 
@@ -272,6 +333,8 @@ router.post('/units/add', requireAdmin, (req, res) => {
         db.units.saveAll(currentUnits);
     }
     
+    db.auditLogs.add('ALTA_UNIDAD', `Se agregó la unidad ${uVal} (${propietario})`, req.session.username || 'Admin');
+
     res.json({ success: true, unit: newUnit });
   } catch (err) {
     res.status(500).json({ error: 'Error al intentar guardar la unidad.' });
@@ -311,6 +374,8 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
       db.units.saveAll(mergedUnits);
     }
 
+    db.auditLogs.add('IMPORTAR_EXCEL_UNIDADES', `Se importaron ${importedUnits.length} unidades desde Excel (Reemplazar: ${replaceAll})`, req.session.username || 'Admin');
+
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
   } catch (err) {
     res.status(500).json({ error: 'Error al procesar la planilla Excel.' });
@@ -324,6 +389,7 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
       if (db.units && typeof db.units.saveAll === 'function') {
         db.units.saveAll([]);
       }
+      db.auditLogs.add('ELIMINAR_TODAS_UNIDADES', `Se eliminaron todas las unidades de la base de datos`, req.session.username || 'Admin');
       return res.json({ success: true, message: 'Todas las unidades han sido eliminadas.' });
     }
 
@@ -333,6 +399,8 @@ router.delete('/units/delete', requireAdmin, (req, res) => {
     if (db.units && typeof db.units.saveAll === 'function') {
       db.units.saveAll(filteredUnits);
     }
+
+    db.auditLogs.add('ELIMINAR_UNIDADES', `Se eliminaron las unidades: ${ids.join(', ')}`, req.session.username || 'Admin');
 
     res.json({ success: true, message: 'Unidades eliminadas.' });
   } catch (err) {
