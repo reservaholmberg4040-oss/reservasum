@@ -53,6 +53,30 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'No autenticado.' });
 }
 
+// --- Endpoint para obtener las reservas del mes para el Calendario del Admin ---
+router.get('/calendar-data', requireAdmin, (req, res) => {
+  try {
+    const { year, month } = req.query; // Espera año y mes (ej: year=2026, month=09)
+    const reservations = readReservations();
+    const blockedDays = readBlockedDays();
+
+    let filteredReservations = reservations;
+    if (year && month) {
+      const prefix = `${year}-${String(month).padStart(2, '0')}`;
+      filteredReservations = reservations.filter(r => r && r.date && String(r.date).startsWith(prefix));
+    }
+
+    res.json({
+      success: true,
+      reservations: filteredReservations,
+      blockedDays: blockedDays
+    });
+  } catch (err) {
+    console.error('Error al obtener datos del calendario admin:', err);
+    res.status(500).json({ error: 'Error interno al cargar los datos del calendario.' });
+  }
+});
+
 // --- Endpoints para Días Bloqueados con Validación de Reservas ---
 router.get('/blocked-days', requireAdmin, (req, res) => {
   res.json(readBlockedDays());
