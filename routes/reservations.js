@@ -159,6 +159,16 @@ router.post('/', async (req, res) => {
     let reservations = readReservations();
     const config = readConfig();
 
+    const unitIdentifier = String(targetUnit.unidad || targetUnit.id).trim();
+    const unitUnidad = String(targetUnit.unidad || '').trim();
+    const unitId = String(targetUnit.id || '').trim();
+
+    // Función auxiliar robusta para verificar si una reserva pertenece a esta unidad (sea por id o unidad)
+    const belongsToUnit = (rUnit) => {
+      const u = String(rUnit || '').trim();
+      return u === unitIdentifier || (unitUnidad && u === unitUnidad) || (unitId && u === unitId);
+    };
+
     // --- 1. VALIDACIÓN DE ANTICIPACIÓN ---
     const maxDiasAnticipacion = Number(config.dias_anticipacion_max) || 60;
     const minDiasAnticipacion = Number(config.dias_anticipacion_min) || 0;
@@ -174,12 +184,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: `No se puede reservar con más de ${maxDiasAnticipacion} días de anticipación.` });
     }
 
-    if (diferenciaDias < minDiasAnticipacion) { // <--- CORREGIDO AQUÍ (cambiado de <= a <)
+    if (diferenciaDias < minDiasAnticipacion) {
       return res.status(400).json({ error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` });
     }
     // ------------------------------------
-
-    const unitIdentifier = String(targetUnit.unidad || targetUnit.id).trim();
 
     // --- 2. VALIDACIÓN DE LÍMITE SEMANAL ---
     const maxReservasSemana = Number(config.max_reservas_semana) || 1;
@@ -187,10 +195,9 @@ router.post('/', async (req, res) => {
 
     const reservasDeLaSemana = reservations.filter(r => {
       if (!r) return false;
-      const rUnit = String(r.unit_id || '').trim();
       const rDateStr = String(r.date || '').trim();
       const rDate = new Date(rDateStr + 'T00:00:00');
-      return rUnit === unitIdentifier && rDate >= weekStart && rDate <= weekEnd;
+      return belongsToUnit(r.unit_id) && rDate >= weekStart && rDate <= weekEnd;
     });
 
     if (reservasDeLaSemana.length >= maxReservasSemana) {
@@ -200,15 +207,18 @@ router.post('/', async (req, res) => {
     }
     // --------------------------------------
 
-    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL ---
+    // --- 3. VALIDACIÓN DE LÍMITE MENSUAL (ROBUSTA) ---
     const maxReservasMes = Number(config.max_reservas_mes) || 4;
-    const targetMonthYear = String(date).trim().slice(0, 7);
+    const targetDateObj = new Date(date + 'T00:00:00');
+    const targetYear = targetDateObj.getFullYear();
+    const targetMonth = targetDateObj.getMonth();
 
     const reservasDelMes = reservations.filter(r => {
       if (!r) return false;
-      const rUnit = String(r.unit_id || '').trim();
-      const rDate = String(r.date || '').trim();
-      return rUnit === unitIdentifier && rDate.startsWith(targetMonthYear);
+      const rDate = new Date(String(r.date || '').trim() + 'T00:00:00');
+      return belongsToUnit(r.unit_id) && 
+             rDate.getFullYear() === targetYear && 
+             rDate.getMonth() === targetMonth;
     });
 
     if (reservasDelMes.length >= maxReservasMes) {
