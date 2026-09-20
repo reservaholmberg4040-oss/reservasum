@@ -173,8 +173,9 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
-    if (!providedPin || storedPin !== providedPin) {
-      return res.status(400).json({ error: 'El PIN de la unidad es incorrecto o está vacío.' });
+    // Validación estricta: PIN obligatorio, compuesto únicamente por números y coincidente
+    if (!providedPin || !/^\d+$/.test(providedPin) || storedPin !== providedPin) {
+      return res.status(400).json({ error: 'El PIN debe ser numérico y es incorrecto o está vacío.' });
     }
 
     let reservations = readReservations();
@@ -335,8 +336,9 @@ router.put('/:id', pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Unidad asociada no encontrada.' });
     }
 
-    if (targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin || '').trim()) {
-      return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
+    const cleanPin = String(unit_pin || '').trim();
+    if (targetUnit.pin && (!/^\d+$/.test(cleanPin) || String(targetUnit.pin).trim() !== cleanPin)) {
+      return res.status(400).json({ error: 'El PIN ingresado es incorrecto o no es numérico.' });
     }
 
     if (date && turno && (date !== currentRes.date || turno !== currentRes.turno)) {
@@ -379,10 +381,11 @@ router.delete('/:id', pinLimiter, (req, res) => {
     }
 
     if (unit_pin) {
+      const cleanPin = String(unit_pin).trim();
       const units = db.units.all();
       const targetUnit = units.find(u => String(u.unidad || u.id) === String(reservation.unit_id));
-      if (targetUnit && targetUnit.pin && String(targetUnit.pin).trim() !== String(unit_pin).trim()) {
-        return res.status(400).json({ error: 'PIN incorrecto para cancelar la reserva.' });
+      if (targetUnit && targetUnit.pin && (!/^\d+$/.test(cleanPin) || String(targetUnit.pin).trim() !== cleanPin)) {
+        return res.status(400).json({ error: 'PIN incorrecto o formato inválido para cancelar la reserva.' });
       }
     }
 
