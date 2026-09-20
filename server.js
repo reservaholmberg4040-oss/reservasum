@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const cookieSession = require('cookie-session');
 
 const db = require('./db');
@@ -32,26 +33,19 @@ app.get('/api/config', (req, res) => {
 // --- ENDPOINTS DE CONFIGURACIÓN GENERAL ---
 app.get('/api/admin/config', async (req, res) => {
   try {
-    // Asegurar que la tabla exista para evitar errores iniciales
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS configuracion (
-        clave VARCHAR(50) PRIMARY KEY,
-        valor VARCHAR(255) NOT NULL
-      )
-    `);
+    const configFile = path.join(__dirname, 'data', 'config.json');
 
-    const [rows] = await db.query('SELECT clave, valor FROM configuracion');
-    const config = rows.reduce((acc, curr) => {
-      acc[curr.clave] = curr.valor;
-      return acc;
-    }, {});
+    let config = { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+    if (fs.existsSync(configFile)) {
+      config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    }
 
     res.json({ 
       success: true, 
       config: {
-        max_reservas_mes: config.max_reservas_mes || 2,
-        dias_anticipacion_max: config.dias_anticipacion_max || 60,
-        dias_anticipacion_min: config.dias_anticipacion_min !== undefined ? config.dias_anticipacion_min : 0
+        max_reservas_mes: config.max_reservas_mes ?? 1,
+        dias_anticipacion_max: config.dias_anticipacion_max ?? 60,
+        dias_anticipacion_min: config.dias_anticipacion_min ?? 0
       } 
     });
   } catch (error) {
@@ -64,16 +58,20 @@ app.post('/api/admin/config', async (req, res) => {
   try {
     const { max_reservas_mes, dias_anticipacion_max, dias_anticipacion_min } = req.body;
     
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS configuracion (
-        clave VARCHAR(50) PRIMARY KEY,
-        valor VARCHAR(255) NOT NULL
-      )
-    `);
+    const dataDir = path.join(__dirname, 'data');
+    const configFile = path.join(dataDir, 'config.json');
 
-    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['max_reservas_mes', max_reservas_mes]);
-    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['dias_anticipacion_max', dias_anticipacion_max]);
-    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['dias_anticipacion_min', dias_anticipacion_min]);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    const configData = {
+      max_reservas_mes: Number(max_reservas_mes),
+      dias_anticipacion_max: Number(dias_anticipacion_max),
+      dias_anticipacion_min: Number(dias_anticipacion_min)
+    };
+
+    fs.writeFileSync(configFile, JSON.stringify(configData, null, 2), 'utf8');
 
     res.json({ success: true, message: 'Configuración guardada con éxito' });
   } catch (error) {
