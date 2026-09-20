@@ -15,7 +15,7 @@
     .admin-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     
     /* Formularios y controles en línea */
-    .block-day-form, .reports-controls, .excel-import-box { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px; }
+    .block-day-form, .reports-controls, .excel-import-box, .config-form { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px; }
     .form-group { display: flex; flex-direction: column; }
     .form-group label { font-size: 0.85rem; margin-bottom: 4px; font-weight: 500; color: #4b5563; }
     .form-group input { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
@@ -60,6 +60,26 @@
         <button id="logout-btn" class="btn btn-secondary" style="background: #6b7280; border: none;">Cerrar Sesión</button>
       </div>
     </header>
+
+    <!-- SECCIÓN NUEVA: Configuración General de Reglas -->
+    <section class="admin-section">
+      <h2>Configuración General de Reservas</h2>
+      <form id="configForm" class="config-form">
+        <div class="form-group">
+          <label for="input-max-reservas">Máx. Reservas / Mes:</label>
+          <input type="number" id="input-max-reservas" min="1" max="20" required style="width: 130px;">
+        </div>
+        <div class="form-group">
+          <label for="input-dias-max">Anticipación Máx. (días):</label>
+          <input type="number" id="input-dias-max" min="1" max="365" required style="width: 130px;">
+        </div>
+        <div class="form-group">
+          <label for="input-dias-min">Anticipación Mín. (días):</label>
+          <input type="number" id="input-dias-min" min="0" max="30" value="0" required style="width: 130px;" title="0 significa sin restricciones mínimas (permite para hoy)">
+        </div>
+        <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+      </form>
+    </section>
 
     <!-- Sección de Bloqueo de Días -->
     <section class="admin-section">
@@ -200,7 +220,7 @@
   <!-- Script de administración -->
   <script src="/js/admin.js"></script>
 
-  <!-- Script menor para manejar la visibilidad del modal -->
+  <!-- Script menor para manejar la visibilidad del modal y la carga de config -->
   <script>
     const modalEl = document.getElementById('add-unit-modal');
     if (modalEl) {
