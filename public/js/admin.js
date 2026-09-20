@@ -63,7 +63,7 @@ function initAdminPanel() {
   loadReportLog();
   loadBlockedDays();
 
-  // Evento para el formulario de bloqueo de días
+  // Evento para el formulario de bloqueo de días con validación
   const blockDayForm = document.getElementById('blockDayForm');
   if (blockDayForm) {
     blockDayForm.addEventListener('submit', async (e) => {
@@ -84,6 +84,7 @@ function initAdminPanel() {
           document.getElementById('blockReason').value = '';
           loadBlockedDays();
         } else {
+          // Muestra la advertencia indicando que hay reservas activas en esa fecha
           alert(data.error || 'No se pudo bloquear el día.');
         }
       } catch (err) {
@@ -290,7 +291,6 @@ function initAdminPanel() {
   }
 }
 
-// Cargar y mostrar los días bloqueados en la tabla/lista del admin
 async function loadBlockedDays() {
   const list = document.getElementById('blockedDaysList');
   if (!list) return;
