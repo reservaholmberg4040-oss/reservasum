@@ -61,6 +61,36 @@ function showLoginForm() {
 function initAdminPanel() {
   loadUnits();
   loadReportLog();
+  loadBlockedDays();
+
+  // Evento para el formulario de bloqueo de días
+  const blockDayForm = document.getElementById('blockDayForm');
+  if (blockDayForm) {
+    blockDayForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const date = document.getElementById('blockDate').value;
+      const reason = document.getElementById('blockReason').value;
+
+      try {
+        const res = await fetch('/api/admin/blocked-days', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date, reason })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert('Día bloqueado correctamente.');
+          document.getElementById('blockDate').value = '';
+          document.getElementById('blockReason').value = '';
+          loadBlockedDays();
+        } else {
+          alert(data.error || 'No se pudo bloquear el día.');
+        }
+      } catch (err) {
+        alert('Error de conexión al bloquear el día.');
+      }
+    });
+  }
 
   const monthSelect = document.getElementById('month-select');
   if (monthSelect && !monthSelect.value) {
@@ -260,6 +290,49 @@ function initAdminPanel() {
   }
 }
 
+// Cargar y mostrar los días bloqueados en la tabla/lista del admin
+async function loadBlockedDays() {
+  const list = document.getElementById('blockedDaysList');
+  if (!list) return;
+
+  try {
+    const res = await fetch('/api/admin/blocked-days');
+    if (!res.ok) return;
+    const days = await res.json();
+
+    if (!Array.isArray(days) || days.length === 0) {
+      list.innerHTML = '<p style="color: #666; font-size: 0.9rem; margin: 0;">No hay días bloqueados actualmente.</p>';
+      return;
+    }
+
+    list.innerHTML = days.map(b => `
+      <li style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">
+        <span><b>${b.date}</b> — ${b.reason}</span>
+        <button onclick="unblockDay('${b.date}')" class="btn btn-xs" style="background: #ef4444; color: white; border: none;">Desbloquear</button>
+      </li>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = '<p style="color: #dc2626; font-size: 0.9rem;">Error al cargar días bloqueados.</p>';
+  }
+}
+
+window.unblockDay = async function(date) {
+  if (!confirm(`¿Estás seguro de que deseas desbloquear el día ${date}?`)) return;
+
+  try {
+    const res = await fetch(`/api/admin/blocked-days/${date}`, {
+      method: 'DELETE'
+    });
+    if (res.ok) {
+      loadBlockedDays();
+    } else {
+      alert('Error al quitar el bloqueo.');
+    }
+  } catch (err) {
+    alert('Error de conexión.');
+  }
+};
+
 function showModalFeedback(text, type) {
   let feedbackEl = document.getElementById('modal-feedback-alert');
   const form = document.getElementById('add-unit-form');
@@ -336,7 +409,7 @@ async function loadUnits() {
           <input type="text" maxlength="4" class="inline-edit" value="${u.pin || ''}" style="border:1px solid #cbd5e1; padding:4px 8px; border-radius:4px; width:70px; text-align:center; font-family:monospace;" onchange="updatePin('${unitId}', this.value)">
         </td>
         <td>
-          <button class="btn-xs" style="padding: 4px 8px; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff;" onclick="regeneratePin('${unitId}')">Regenerar PIN</button>
+          <button class="btn-xs" onclick="regeneratePin('${unitId}')">Regenerar PIN</button>
         </td>
         <td style="text-align: center;">
           <input type="checkbox" 
