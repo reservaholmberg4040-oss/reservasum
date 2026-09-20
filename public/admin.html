@@ -4,24 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel de Administración</title>
-  <!-- Hoja de estilos original -->
   <link rel="stylesheet" href="/css/admin.css">
   
-  <!-- Estilos de corrección rápida para asegurar la alineación -->
   <style>
     body { font-family: Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 20px; }
     .admin-container { max-width: 1200px; margin: 0 auto; }
-    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
     .admin-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     
-    /* Formularios y controles en línea */
     .block-day-form, .reports-controls, .excel-import-box, .config-form { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px; }
     .form-group { display: flex; flex-direction: column; }
     .form-group label { font-size: 0.85rem; margin-bottom: 4px; font-weight: 500; color: #4b5563; }
     .form-group input { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
     .flex-grow { flex: 1; min-width: 200px; }
     
-    /* Botones */
     .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: white; display: inline-flex; align-items: center; justify-content: center; }
     .btn-primary { background: #4f46e5; }
     .btn-secondary { background: #6b7280; color: white; text-decoration: none; }
@@ -29,21 +25,20 @@
     .btn-danger { background: #ef4444; }
     .btn-danger-dark { background: #991b1b; }
     .btn-info { background: #0ea5e9; }
+    .btn-logs { background: #8b5cf6; }
     
-    /* Tablas */
     .table-responsive { overflow-x: auto; }
     .admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
     .admin-table th, .admin-table td { padding: 10px; border-bottom: 1px solid #e5e7eb; }
     .admin-table th { background: #f9fafb; font-weight: 600; }
     .text-center { text-align: center; }
     
-    /* Cabecera de secciones */
     .section-header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
     .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
     
-    /* Modales */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
     .modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .modal-content-large { max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; }
     .form-row { display: flex; gap: 10px; margin-bottom: 12px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     .font-mono { font-family: monospace; }
@@ -51,17 +46,17 @@
 </head>
 <body>
 
-  <!-- Contenedor principal de administración -->
   <div class="admin-container">
     <header class="admin-header">
       <h1>Panel de Administración</h1>
-      <div style="display: flex; gap: 10px; align-items: center;">
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <button id="btn-open-logs-modal" class="btn btn-logs">📋 Ver Logs</button>
         <a href="/" class="btn btn-secondary">← Ir al Calendario</a>
         <button id="logout-btn" class="btn btn-secondary" style="background: #6b7280; border: none;">Cerrar Sesión</button>
       </div>
     </header>
 
-    <!-- SECCIÓN DE CONFIGURACIÓN GENERAL DE REGLAS -->
+    <!-- SECCIÓN DE CONFIGURACIÓN GENERAL -->
     <section class="admin-section">
       <h2>Configuración General de Reservas</h2>
       <form id="configForm" class="config-form">
@@ -79,13 +74,13 @@
         </div>
         <div class="form-group">
           <label for="input-dias-min">Anticipación Mín. (días):</label>
-          <input type="number" id="input-dias-min" min="0" max="30" value="0" required style="width: 130px;" title="0 significa sin restricciones mínimas (permite para hoy)">
+          <input type="number" id="input-dias-min" min="0" max="30" value="0" required style="width: 130px;">
         </div>
         <button type="submit" class="btn btn-primary">Guardar Configuración</button>
       </form>
     </section>
 
-    <!-- Sección de Vista de Calendario Interactiva -->
+    <!-- CALENDARIO VISUAL -->
     <section class="admin-section">
       <div class="section-header-actions">
         <h2>Calendario Visual de Ocupación</h2>
@@ -96,14 +91,12 @@
         </div>
       </div>
       
-      <!-- Leyenda de colores -->
       <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 0.85rem; align-items: center; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #dcfce7; border: 1px solid #166534; display: inline-block; border-radius: 3px;"></span> Libre</div>
-        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #fee2e2; border: 1px solid #ef4444; display: inline-block; border-radius: 3px;"></span> Reservado</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #ffffff; border: 1px solid #e5e7eb; display: inline-block; border-radius: 3px;"></span> Libre</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #fff5f5; border: 1px solid #fca5a5; display: inline-block; border-radius: 3px;"></span> Reservado</div>
         <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #f3f4f6; border: 1px solid #9ca3af; display: inline-block; border-radius: 3px;"></span> Bloqueado</div>
       </div>
 
-      <!-- Cuadrícula del Calendario -->
       <div id="admin-calendar-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;">
         <div style="font-weight: bold; color: #4b5563; padding: 6px;">Dom</div>
         <div style="font-weight: bold; color: #4b5563; padding: 6px;">Lun</div>
@@ -115,7 +108,7 @@
       </div>
     </section>
 
-    <!-- Sección de Bloqueo de Días -->
+    <!-- BLOQUEAR DÍAS -->
     <section class="admin-section">
       <h2>Bloquear Días del Calendario</h2>
       <form id="blockDayForm" class="block-day-form">
@@ -131,12 +124,10 @@
       </form>
       
       <h3>Días actualmente bloqueados</h3>
-      <ul id="blockedDaysList" style="list-style: none; padding: 0; margin-top: 10px;">
-        <!-- Se llena dinámicamente -->
-      </ul>
+      <ul id="blockedDaysList" style="list-style: none; padding: 0; margin-top: 10px;"></ul>
     </section>
 
-    <!-- Sección de Reportes -->
+    <!-- REPORTES -->
     <section class="admin-section">
       <h2>Informes Mensuales</h2>
       <div class="reports-controls">
@@ -158,14 +149,12 @@
               <th>Estado</th>
             </tr>
           </thead>
-          <tbody id="history-tbody">
-            <!-- Se llena dinámicamente -->
-          </tbody>
+          <tbody id="history-tbody"></tbody>
         </table>
       </div>
     </section>
 
-    <!-- Sección de Gestión de Unidades -->
+    <!-- UNIDADES -->
     <section class="admin-section">
       <div class="section-header-actions">
         <h2>Gestión de Unidades</h2>
@@ -176,7 +165,6 @@
         </div>
       </div>
 
-      <!-- Importación por Excel -->
       <div class="excel-import-box" style="background: #f9fafb; padding: 12px; border-radius: 6px; border: 1px solid #e5e7eb;">
         <input type="file" id="excel-file-input" accept=".xlsx, .xls">
         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem;">
@@ -185,7 +173,6 @@
         <button id="btn-upload-excel" class="btn btn-primary">Importar Excel</button>
       </div>
 
-      <!-- Tabla de Unidades -->
       <div class="table-responsive">
         <table class="admin-table">
           <thead>
@@ -200,16 +187,13 @@
               <th class="text-center">Baja</th>
             </tr>
           </thead>
-          <tbody id="units-tbody">
-            <!-- Se llena dinámicamente -->
-          </tbody>
+          <tbody id="units-tbody"></tbody>
         </table>
       </div>
     </section>
-
   </div>
 
-  <!-- Modal para Agregar Unidad -->
+  <!-- MODAL: AGREGAR UNIDAD -->
   <div id="add-unit-modal" class="modal">
     <div class="modal-content">
       <h3 style="margin-top: 0; margin-bottom: 15px;">Agregar Nueva Unidad</h3>
@@ -248,13 +232,55 @@
     </div>
   </div>
 
-  <!-- CONTENEDOR PARA LAS NOTIFICACIONES FLOTANTES (TOASTS) -->
+  <!-- MODAL: VENTANA FLOTANTE DE LOGS CON FILTROS DESDE/HASTA -->
+  <div id="logs-modal" class="modal">
+    <div class="modal-content modal-content-large">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0;">Historial de Auditoría (Logs)</h3>
+        <button type="button" id="btn-close-logs-modal" class="btn btn-secondary" style="padding: 4px 10px;">✕</button>
+      </div>
+      
+      <!-- Controles de filtrado y descarga -->
+      <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap; background: #f9fafb; padding: 10px; border-radius: 6px;">
+        <div class="form-group">
+          <label>Desde:</label>
+          <input type="date" id="log-start-date" style="padding: 6px;">
+        </div>
+        <div class="form-group">
+          <label>Hasta:</label>
+          <input type="date" id="log-end-date" style="padding: 6px;">
+        </div>
+        <button type="button" id="btn-filter-logs" class="btn btn-primary" style="padding: 7px 12px;">Filtrar</button>
+        <button type="button" id="btn-download-logs-excel" class="btn btn-success" style="padding: 7px 12px;">📥 Descargar Excel Filtrado</button>
+      </div>
+
+      <!-- Tabla de Logs con Scroll -->
+      <div class="table-responsive" style="flex: 1; max-height: 50vh; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 4px;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th style="position: sticky; top: 0; background: #f9fafb;">Fecha / Hora</th>
+              <th style="position: sticky; top: 0; background: #f9fafb;">Usuario</th>
+              <th style="position: sticky; top: 0; background: #f9fafb;">Acción</th>
+              <th style="position: sticky; top: 0; background: #f9fafb;">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr><td colspan="4" class="text-center" style="padding: 20px;">Cargando registros...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 15px;">
+        <button type="button" id="btn-close-logs-footer" class="btn btn-secondary">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
 
-  <!-- Script principal de administración -->
   <script src="/js/admin.js"></script>
 
-  <!-- Script para la lógica del Calendario Visual Admin con turnos diferenciados -->
   <script>
     let currentCalDate = new Date();
 
@@ -269,9 +295,7 @@
       try {
         const res = await fetch(`/api/admin/calendar-data?year=${year}&month=${month}`);
         const data = await res.json();
-        
         if (!data.success) return;
-
         renderCalendarGrid(year, month, data.reservations, data.blockedDays);
       } catch (err) {
         console.error('Error cargando calendario admin:', err);
@@ -304,7 +328,6 @@
         const isBlocked = blockedDays.some(b => b.date === dateStr);
         const dayRes = reservations.filter(r => r && String(r.date).trim() === dateStr);
 
-        // Identificar reservas por turno (ajustado según identificador de turno del sistema)
         const resDia = dayRes.find(r => String(r.turno).toLowerCase().includes('dia') || String(r.turno).toLowerCase().includes('mañana') || String(r.turno) === '1');
         const resNoche = dayRes.find(r => String(r.turno).toLowerCase().includes('noche') || String(r.turno) === '2');
 
@@ -319,7 +342,6 @@
           dayDiv.style.borderColor = '#e5e7eb';
         }
 
-        // Cabecera del día (Número)
         const headerRow = document.createElement('div');
         headerRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 3px; margin-bottom: 4px;";
         
@@ -336,7 +358,6 @@
         }
         dayDiv.appendChild(headerRow);
 
-        // Contenedor de Turnos (Día arriba, Noche abajo)
         const shiftsContainer = document.createElement('div');
         shiftsContainer.style.cssText = "display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem;";
 
@@ -346,13 +367,11 @@
           blockedText.style.cssText = "color: #4b5563; text-align: center; font-style: italic; padding: 10px 0;";
           shiftsContainer.appendChild(blockedText);
         } else {
-          // --- TURNO DÍA ---
           const shiftDia = document.createElement('div');
           shiftDia.style.cssText = `padding: 2px 4px; border-radius: 3px; text-align: left; background: ${resDia ? '#fee2e2' : '#dcfce7'}; color: ${resDia ? '#991b1b' : '#166534'}; font-weight: ${resDia ? 'bold' : 'normal'};`;
           shiftDia.textContent = resDia ? `☀️ Día: U-${resDia.unit_id}` : `☀️ Día: Libre`;
           shiftsContainer.appendChild(shiftDia);
 
-          // --- TURNO NOCHE ---
           const shiftNoche = document.createElement('div');
           shiftNoche.style.cssText = `padding: 2px 4px; border-radius: 3px; text-align: left; background: ${resNoche ? '#fee2e2' : '#dcfce7'}; color: ${resNoche ? '#991b1b' : '#166534'}; font-weight: ${resNoche ? 'bold' : 'normal'};`;
           shiftNoche.textContent = resNoche ? `🌙 Noche: U-${resNoche.unit_id}` : `🌙 Noche: Libre`;
@@ -361,7 +380,6 @@
 
         dayDiv.appendChild(shiftsContainer);
 
-        // Al hacer clic, selecciona la fecha para bloquear
         dayDiv.addEventListener('click', () => {
           const dateInput = document.getElementById('blockDate');
           if (dateInput) {
@@ -374,22 +392,77 @@
       }
     }
 
+    // --- LÓGICA DE LA VENTANA FLOTANTE DE LOGS ---
+    const logsModal = document.getElementById('logs-modal');
+    const btnOpenLogs = document.getElementById('btn-open-logs-modal');
+    const btnCloseLogs = document.getElementById('btn-close-logs-modal');
+    const btnCloseLogsFooter = document.getElementById('btn-close-logs-footer');
+    const btnFilterLogs = document.getElementById('btn-filter-logs');
+    const btnDownloadLogsExcel = document.getElementById('btn-download-logs-excel');
+
+    async function fetchAndRenderLogs() {
+      const startDate = document.getElementById('log-start-date').value;
+      const endDate = document.getElementById('log-end-date').value;
+      const tbody = document.getElementById('logs-tbody');
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding: 20px;">Cargando registros...</td></tr>`;
+
+      try {
+        let url = '/api/admin/audit-logs?';
+        if (startDate) url += `startDate=${startDate}&`;
+        if (endDate) url += `endDate=${endDate}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success || !data.logs || data.logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding: 20px; color: #6b7280;">No se encontraron registros de auditoría.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = '';
+        data.logs.forEach(l => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td style="white-space: nowrap; font-size: 0.82rem;">${l.timestamp}</td>
+            <td style="font-weight: 500; font-size: 0.85rem;">${l.user}</td>
+            <td><span style="background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${l.action}</span></td>
+            <td style="font-size: 0.85rem; color: #4b5563;">${l.details}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error('Error al cargar logs:', err);
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding: 20px; color: #ef4444;">Error al cargar los logs.</td></tr>`;
+      }
+    }
+
+    if (btnOpenLogs) {
+      btnOpenLogs.addEventListener('click', () => {
+        logsModal.style.display = 'flex';
+        fetchAndRenderLogs();
+      });
+    }
+
+    if (btnCloseLogs) btnCloseLogs.addEventListener('click', () => logsModal.style.display = 'none');
+    if (btnCloseLogsFooter) btnCloseLogsFooter.addEventListener('click', () => logsModal.style.display = 'none');
+    if (btnFilterLogs) btnFilterLogs.addEventListener('click', fetchAndRenderLogs);
+
+    if (btnDownloadLogsExcel) {
+      btnDownloadLogsExcel.addEventListener('click', () => {
+        const startDate = document.getElementById('log-start-date').value;
+        const endDate = document.getElementById('log-end-date').value;
+        let url = '/api/admin/audit-logs/download?';
+        if (startDate) url += `startDate=${startDate}&`;
+        if (endDate) url += `endDate=${endDate}`;
+        window.location.href = url;
+      });
+    }
+
     const prevBtn = document.getElementById('cal-prev-month');
     const nextBtn = document.getElementById('cal-next-month');
 
-    if (prevBtn) {
-      prevBtn.addEventListener('click', () => {
-        currentCalDate.setMonth(currentCalDate.getMonth() - 1);
-        loadAdminCalendar();
-      });
-    }
-
-    if (nextBtn) {
-      nextBtn.addEventListener('click', () => {
-        currentCalDate.setMonth(currentCalDate.getMonth() + 1);
-        loadAdminCalendar();
-      });
-    }
+    if (prevBtn) prevBtn.addEventListener('click', () => { currentCalDate.setMonth(currentCalDate.getMonth() - 1); loadAdminCalendar(); });
+    if (nextBtn) nextBtn.addEventListener('click', () => { currentCalDate.setMonth(currentCalDate.getMonth() + 1); loadAdminCalendar(); });
 
     window.addEventListener('DOMContentLoaded', () => {
       loadAdminCalendar();
@@ -397,11 +470,8 @@
       const modalEl = document.getElementById('add-unit-modal');
       if (modalEl) {
         const observer = new MutationObserver(() => {
-          if (modalEl.classList.contains('active')) {
-            modalEl.style.display = 'flex';
-          } else {
-            modalEl.style.display = 'none';
-          }
+          if (modalEl.classList.contains('active')) modalEl.style.display = 'flex';
+          else modalEl.style.display = 'none';
         });
         observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
       }
