@@ -33,9 +33,9 @@ function showToast(message, type = 'success') {
   toast.style.transform = 'translateY(10px)';
 
   if (type === 'success') {
-    toast.style.backgroundColor = '#10b981'; // Verde moderno
+    toast.style.backgroundColor = '#10b981';
   } else {
-    toast.style.backgroundColor = '#ef4444'; // Rojo moderno para errores/advertencias
+    toast.style.backgroundColor = '#ef4444';
   }
 
   toast.textContent = message;
@@ -102,6 +102,34 @@ function initAdminPanel() {
   loadUnits();
   loadReportLog();
   loadBlockedDays();
+  loadConfig(); // Cargar la configuración general al iniciar el panel
+
+  // Manejador para el formulario de Configuración General
+  const configForm = document.getElementById('configForm');
+  if (configForm) {
+    configForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const max_reservas_mes = document.getElementById('input-max-reservas').value;
+      const dias_anticipacion_max = document.getElementById('input-dias-max').value;
+      const dias_anticipacion_min = document.getElementById('input-dias-min').value;
+
+      try {
+        const res = await fetch('/api/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ max_reservas_mes, dias_anticipacion_max, dias_anticipacion_min })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast('¡Configuración actualizada correctamente!', 'success');
+        } else {
+          showToast('Error al guardar: ' + (data.error || 'No se pudo actualizar.'), 'danger');
+        }
+      } catch (error) {
+        showToast('Error de conexión al guardar la configuración.', 'danger');
+      }
+    });
+  }
 
   // Bloqueo de días con validación y notificaciones elegantes
   const blockDayForm = document.getElementById('blockDayForm');
@@ -124,7 +152,6 @@ function initAdminPanel() {
           document.getElementById('blockReason').value = '';
           loadBlockedDays();
         } else {
-          // Muestra el error detallado de reservas existentes de forma elegante
           showToast(data.error || 'No se pudo bloquear el día.', 'danger');
         }
       } catch (err) {
@@ -324,6 +351,26 @@ function initAdminPanel() {
         }
       }
     });
+  }
+}
+
+// Función auxiliar para cargar los datos de configuración en los inputs del panel
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/admin/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.success && data.config) {
+      const maxResInput = document.getElementById('input-max-reservas');
+      const maxAntInput = document.getElementById('input-dias-max');
+      const minAntInput = document.getElementById('input-dias-min');
+
+      if (maxResInput) maxResInput.value = data.config.max_reservas_mes || 2;
+      if (maxAntInput) maxAntInput.value = data.config.dias_anticipacion_max || 60;
+      if (minAntInput) minAntInput.value = data.config.dias_anticipacion_min !== undefined ? data.config.dias_anticipacion_min : 0;
+    }
+  } catch (error) {
+    console.error('Error al cargar la configuración:', error);
   }
 }
 
