@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const dataDir = path.join(__dirname, 'data');
 const dbFile = path.join(dataDir, 'db.json'); // Reservas
 const unitsFile = path.join(dataDir, 'units.json'); // Unidades
+const auditFile = path.join(dataDir, 'audit-logs.json'); // Logs de Auditoría
 
 // Asegurar que exista la carpeta data
 if (!fs.existsSync(dataDir)) {
@@ -32,14 +33,12 @@ function readJson(file, defaultVal) {
 
 function writeJson(file, data) {
   try {
-    // Aseguramos que el directorio exista antes de escribir (por seguridad)
     const dir = path.dirname(file);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    
     fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
   } catch (e) {
     console.error(`Error escribiendo en ${file}:`, e);
-    throw e; // Lanzamos el error para que el backend lo maneje
+    throw e;
   }
 }
 
@@ -48,7 +47,6 @@ let dbData = {
   reservations: readJson(dbFile, []),
   units: readJson(unitsFile, []),
   admin: [
-    // Usuario: admin, Contraseña: admin123 (puedes cambiarlo en el archivo db.json luego del primer inicio)
     { username: 'admin', password_hash: bcrypt.hashSync('admin123', 8) }
   ],
   reportLog: []
@@ -82,13 +80,11 @@ const db = {
   },
   units: {
     all() {
-      // Al obtener todas, nos aseguramos de que el campo 'baja' exista (para unidades viejas)
       return dbData.units.map(u => ({
-        baja: false, // Valor por defecto si no existe
+        baja: false,
         ...u
       }));
     },
-    // Busca una unidad por su ID o número de unidad
     byId(id) {
       return dbData.units.find(x => String(x.id) === String(id) || String(x.unidad) === String(id));
     },
@@ -101,6 +97,7 @@ const db = {
       if (u) {
         u.pin = pin;
         writeJson(unitsFile, dbData.units);
+        db.auditLogs.add('CAMBIO_PIN', `Se actualizó el PIN de la unidad ${u.unidad || id}`);
         return u;
       }
       return null;
@@ -110,6 +107,7 @@ const db = {
       if (u) {
         u.pin = Math.floor(1000 + Math.random() * 9000).toString();
         writeJson(unitsFile, dbData.units);
+        db.auditLogs.add('REGENERAR_PIN', `Se regeneró el PIN de la unidad ${u.unidad || id}`);
         return u;
       }
       return null;
@@ -119,26 +117,27 @@ const db = {
       if (u) {
         u.propietario = propietario;
         writeJson(unitsFile, dbData.units);
+        db.auditLogs.add('CAMBIO_PROPIETARIO', `Se actualizó el propietario de la unidad ${u.unidad || id} a: ${propietario}`);
         return u;
       }
       return null;
     },
-    // --- FUNCIÓN: Actualizar Email ---
     setEmail(id, email) {
       const u = this.byId(id);
       if (u) {
         u.email = email ? String(email).trim() : '';
         writeJson(unitsFile, dbData.units);
+        db.auditLogs.add('CAMBIO_EMAIL', `Se actualizó el correo de la unidad ${u.unidad || id}`);
         return u;
       }
       return null;
     },
-    // --- Marcar/Desmarcar BAJA ---
     setBaja(id, estadoBaja) {
       const u = this.byId(id);
       if (u) {
-        u.baja = estadoBaja === true; // Nos aseguramos que sea booleano
+        u.baja = estadoBaja === true;
         writeJson(unitsFile, dbData.units);
+        db.auditLogs.add('ESTADO_BAJA', `Se cambió el estado de baja de la unidad ${u.unidad || id} a: ${u.baja}`);
         return u;
       }
       return null;
@@ -156,6 +155,33 @@ const db = {
     add(log) {
       dbData.reportLog = dbData.reportLog || [];
       dbData.reportLog.push(log);
+    }
+  },
+  auditLogs: {
+    all() {
+      return readJson(auditFile, []);
+    },
+    add(action, details, user = 'Sistema') {
+      try {
+        let logs = readJson(auditFile, []);
+        const newLog = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
+          timestamp: new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).replace(' ', 'T') + '-03:00',
+          user: String(user),
+          action: String(action),
+          details: String(details)
+        };
+        logs.unshift.call(logs, newLog); // Agregar al principio
+
+        // Límite de 1000 registros (eliminar más antiguos si supera el tope)
+        if (logs.length > 1000) {
+          logs = logs.slice(0, 1000);
+        }
+
+        writeJson(auditFile, logs);
+      } catch (err) {
+        console.error('Error al registrar log de auditoría:', err);
+      }
     }
   }
 };
