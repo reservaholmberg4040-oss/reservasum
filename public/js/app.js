@@ -16,43 +16,83 @@ function toast(msg, type = '') {
   setTimeout(() => el.remove(), 4200);
 }
 
+function getUnitDetails(unitId) {
+  if (!unitId || !units.length) return null;
+  return units.find(u => String(u.unidad || u.id) === String(unitId));
+}
+
 function unitLabel(u) {
-  return `${u.piso === 'PB' ? 'PB ' + u.dto : 'Piso ' + u.piso + ' ' + u.dto} — ${u.propietario}`;
+  if (!u) return 'Unidad desconocida';
+  const piso = u.piso !== undefined && u.piso !== null ? u.piso : (u.floor || '');
+  const dto = u.dto !== undefined && u.dto !== null ? u.dto : (u.departamento || u.letter || '');
+  const prop = u.propietario !== undefined && u.propietario !== null ? u.propietario : (u.owner || '');
+  
+  const ubicacion = piso === 'PB' ? `PB ${dto}` : `Piso ${piso} ${dto}`;
+  return `${ubicacion.trim()} — ${prop}`;
 }
 
 // ---------- Estado ----------
 let currentYear = new Date().getFullYear();
 let units = [];
-let reservationsByDate = {}; // { 'YYYY-MM-DD': { dia: reservation|null, noche: reservation|null } }
+let reservationsByDate = {}; 
+let blockedDaysMap = {}; // Mapeo de días bloqueados por fecha
 let selectedDate = null;
-let currentPinUnit = null; // { id, pin } — unidad "desbloqueada" en la pestaña Mis Reservas
-let isSubmittingReservation = false; // Bloqueo anti-doble clic
+let currentPinUnit = null; 
+let isSubmittingReservation = false;
 
 // ---------- Carga inicial ----------
 async function init() {
-  const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-  if (cfg.buildingName) document.getElementById('buildingName').textContent = cfg.buildingName;
+  try {
+    const cfg = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+    if (cfg.buildingName) {
+      const bName = document.getElementById('buildingName');
+      if (bName) bName.textContent = cfg.buildingName;
+    }
 
-  units = await fetch('/api/units').then(r => r.json());
-  populateUnitSelect('unitSelect');
-  populateUnitSelect('misUnitSelect');
+    units = await fetch('/api/units').then(r => r.json());
+    populateUnitSelect('unitSelect');
+    populateUnitSelect('misUnitSelect');
 
-  document.getElementById('yearLabel').textContent = currentYear;
-  await loadYear(currentYear);
-  renderYearGrid();
+    const yLabel = document.getElementById('yearLabel');
+    if (yLabel) yLabel.textContent = currentYear;
+    
+    await loadBlockedDays();
+    await loadYear(currentYear);
+    renderYearGrid();
 
-  setupTabs();
-  setupYearSwitcher();
-  setupModals();
-  setupPinForm();
+    setupTabs();
+    setupYearSwitcher();
+    setupModals();
+    setupPinForm();
+  } catch (err) {
+    console.error("Error en la inicialización:", err);
+  }
+}
+
+async function loadBlockedDays() {
+  try {
+    const list = await fetch('/api/reservations/blocked-days').then(r => r.json());
+    blockedDaysMap = {};
+    if (Array.isArray(list)) {
+      list.forEach(b => {
+        blockedDaysMap[b.date] = b.reason || 'Mantenimiento del SUM';
+      });
+    }
+  } catch (e) {
+    blockedDaysMap = {};
+  }
 }
 
 async function loadYear(year) {
-  const rows = await fetch(`/api/reservations?year=${year}`).then(r => r.json());
-  reservationsByDate = {};
-  for (const r of rows) {
-    if (!reservationsByDate[r.date]) reservationsByDate[r.date] = { dia: null, noche: null };
-    reservationsByDate[r.date][r.turno] = r;
+  try {
+    const rows = await fetch(`/api/reservations?year=${year}`).then(r => r.json());
+    reservationsByDate = {};
+    for (const r of rows) {
+      if (!reservationsByDate[r.date]) reservationsByDate[r.date] = { dia: null, noche: null };
+      reservationsByDate[r.date][r.turno] = r;
+    }
+  } catch (err) {
+    console.error("Error al cargar el año:", err);
   }
 }
 
@@ -75,28 +115,42 @@ function setupTabs() {
 
 function goToTab(tab, preselectUnitId) {
   document.querySelectorAll('.nav-links a[data-tab]').forEach(x => x.classList.toggle('active', x.dataset.tab === tab));
-  document.getElementById('tab-calendario').style.display = tab === 'calendario' ? '' : 'none';
-  document.getElementById('tab-misreservas').style.display = tab === 'misreservas' ? '' : 'none';
+  const tabCal = document.getElementById('tab-calendario');
+  const tabMis = document.getElementById('tab-misreservas');
+  if (tabCal) tabCal.style.display = tab === 'calendario' ? '' : 'none';
+  if (tabMis) tabMis.style.display = tab === 'misreservas' ? '' : 'none';
   if (tab === 'misreservas' && preselectUnitId) {
-    document.getElementById('misUnitSelect').value = preselectUnitId;
-    document.getElementById('misPinInput').focus();
+    const misUnit = document.getElementById('misUnitSelect');
+    const misPin = document.getElementById('misPinInput');
+    if (misUnit) misUnit.value = preselectUnitId;
+    if (misPin) misPin.focus();
   }
 }
 
 // ---------- Year switcher ----------
 function setupYearSwitcher() {
-  document.getElementById('prevYear').addEventListener('click', async () => {
-    currentYear--;
-    document.getElementById('yearLabel').textContent = currentYear;
-    await loadYear(currentYear);
-    renderYearGrid();
-  });
-  document.getElementById('nextYear').addEventListener('click', async () => {
-    currentYear++;
-    document.getElementById('yearLabel').textContent = currentYear;
-    await loadYear(currentYear);
-    renderYearGrid();
-  });
+  const prevBtn = document.getElementById('prevYear');
+  const nextBtn = document.getElementById('nextYear');
+  const yLabel = document.getElementById('yearLabel');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', async () => {
+      currentYear--;
+      if (yLabel) yLabel.textContent = currentYear;
+      await loadBlockedDays();
+      await loadYear(currentYear);
+      renderYearGrid();
+    });
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener('click', async () => {
+      currentYear++;
+      if (yLabel) yLabel.textContent = currentYear;
+      await loadBlockedDays();
+      await loadYear(currentYear);
+      renderYearGrid();
+    });
+  }
 }
 
 // ---------- Render calendario anual ----------
@@ -110,7 +164,7 @@ function renderYearGrid() {
     const card = document.createElement('div');
     card.className = 'month-card';
 
-    const firstDow = (new Date(currentYear, m, 1).getDay() + 6) % 7; // lunes=0
+    const firstDow = (new Date(currentYear, m, 1).getDay() + 6) % 7; 
     const daysInMonth = new Date(currentYear, m + 1, 0).getDate();
 
     let html = `<h3>${MESES[m]} ${currentYear}</h3>`;
@@ -124,11 +178,13 @@ function renderYearGrid() {
       const info = reservationsByDate[iso] || { dia: null, noche: null };
       const isPast = iso < today;
       const isToday = iso === today;
-      html += `<div class="day-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" data-date="${iso}">
+      const isBlocked = !!blockedDaysMap[iso];
+
+      html += `<div class="day-cell ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${isBlocked ? 'blocked' : ''}" data-date="${iso}" ${isBlocked ? 'style="background: #fee2e2; border-color: #fca5a5;"' : ''}>
         <span class="day-num">${d}</span>
         <div class="day-marks">
-          <i class="${info.dia ? 'on-dia' : ''}"></i>
-          <i class="${info.noche ? 'on-noche' : ''}"></i>
+          <i class="${isBlocked ? 'on-blocked' : (info.dia ? 'on-dia' : '')}"></i>
+          <i class="${isBlocked ? 'on-blocked' : (info.noche ? 'on-noche' : '')}"></i>
         </div>
       </div>`;
     }
@@ -142,13 +198,19 @@ function renderYearGrid() {
   });
 }
 
-// ---------- Modal de día ----------
+// ---------- Modales ----------
 function setupModals() {
-  document.getElementById('closeDayModal').addEventListener('click', () => toggleOverlay('dayOverlay', false));
-  document.getElementById('dayOverlay').addEventListener('click', (e) => { if (e.target.id === 'dayOverlay') toggleOverlay('dayOverlay', false); });
-  document.getElementById('closeFormModal').addEventListener('click', () => toggleOverlay('formOverlay', false));
-  document.getElementById('formOverlay').addEventListener('click', (e) => { if (e.target.id === 'formOverlay') toggleOverlay('formOverlay', false); });
-  document.getElementById('reservaForm').addEventListener('submit', onSubmitReserva);
+  const closeDay = document.getElementById('closeDayModal');
+  const dayOv = document.getElementById('dayOverlay');
+  const closeForm = document.getElementById('closeFormModal');
+  const formOv = document.getElementById('formOverlay');
+  const form = document.getElementById('reservaForm');
+
+  if (closeDay) closeDay.addEventListener('click', () => toggleOverlay('dayOverlay', false));
+  if (dayOv) dayOv.addEventListener('click', (e) => { if (e.target.id === 'dayOverlay') toggleOverlay('dayOverlay', false); });
+  if (closeForm) closeForm.addEventListener('click', () => toggleOverlay('formOverlay', false));
+  if (formOv) formOv.addEventListener('click', (e) => { if (e.target.id === 'formOverlay') toggleOverlay('formOverlay', false); });
+  if (form) form.addEventListener('submit', onSubmitReserva);
 }
 
 function toggleOverlay(id, show) {
@@ -163,14 +225,40 @@ function fmtFecha(iso) {
   return `${dias[dt.getDay()]} ${d} de ${MESES[m - 1]} ${y}`;
 }
 
-function openDayModal(iso) {
+async function openDayModal(iso) {
   selectedDate = iso;
-  document.getElementById('dayModalTitle').textContent = fmtFecha(iso);
+  const title = document.getElementById('dayModalTitle');
+  const sub = document.getElementById('dayModalSub');
+  if (title) title.textContent = fmtFecha(iso);
+  
+  await loadBlockedDays(); // Actualizar por si el admin bloqueó algo recién
+  const blockReason = blockedDaysMap[iso];
   const isPast = iso < todayISO();
-  document.getElementById('dayModalSub').textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
+
+  if (sub) {
+    if (blockReason) {
+      sub.textContent = `⚠️ Día bloqueado por administración`;
+    } else {
+      sub.textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
+    }
+  }
 
   const info = reservationsByDate[iso] || { dia: null, noche: null };
   const cont = document.getElementById('turnosContainer');
+  if (!cont) return;
+
+  if (blockReason) {
+    cont.innerHTML = `
+      <div class="turno-card" style="background: #fff5f5; border: 1px solid #feb2b2; padding: 16px; border-radius: 8px; text-align: center;">
+        <span class="status-pill" style="background: #e53e3e; color: white; padding: 4px 10px; border-radius: 4px; font-weight: bold;">No disponible</span>
+        <p style="margin-top: 12px; font-size: 1rem; color: #9b2c2c;">
+          <b>Motivo del bloqueo:</b><br>${blockReason}
+        </p>
+      </div>`;
+    toggleOverlay('dayOverlay', true);
+    return;
+  }
+
   cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
 
   cont.querySelectorAll('[data-action]').forEach(btn => {
@@ -183,7 +271,12 @@ function openDayModal(iso) {
 function renderTurnoCard(iso, turno, reserva, isPast) {
   const label = turno === 'dia' ? '☀️ Turno Día' : '🌙 Turno Noche';
   if (reserva) {
-    const unidadLabel = reserva.piso === 'PB' ? `PB ${reserva.dto}` : `Piso ${reserva.piso} ${reserva.dto}`;
+    const matchedUnit = getUnitDetails(reserva.unit_id);
+    const pisoVal = matchedUnit ? matchedUnit.piso : (reserva.piso || reserva.floor || '');
+    const dtoVal = matchedUnit ? matchedUnit.dto : (reserva.dto || reserva.departamento || reserva.letter || '');
+    const propVal = matchedUnit ? matchedUnit.propietario : (reserva.propietario || '');
+    const unidadLabel = pisoVal === 'PB' ? `PB ${dtoVal}` : `Piso ${pisoVal} ${dtoVal}`;
+
     return `
       <div class="turno-card">
         <div class="turno-head">
@@ -191,8 +284,8 @@ function renderTurnoCard(iso, turno, reserva, isPast) {
           <span class="status-pill ocupado">Ocupado</span>
         </div>
         <div class="turno-info">
-          <b>Unidad:</b> ${unidadLabel} (${reserva.propietario})<br>
-          <b>Reservó:</b> ${reserva.nombre} ${reserva.apellido}
+          <b>Unidad:</b> ${unidadLabel.trim()} (${propVal})<br>
+          <b>Reservó:</b> ${reserva.nombre || ''} ${reserva.apellido || ''}
         </div>
         ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
       </div>`;
@@ -215,26 +308,36 @@ function handleTurnoAction(action, iso, turno, id, unitId) {
   if (action === 'manage') goToTab('misreservas', unitId);
 }
 
-// ---------- Formulario de reserva (crear / editar) ----------
+// ---------- Formulario de reserva ----------
 function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
-  document.getElementById('formAlert').innerHTML = '';
-  document.getElementById('reservaForm').reset();
-  document.getElementById('reservaDate').value = date;
-  document.getElementById('reservaTurno').value = turno;
-  document.getElementById('reservaEditId').value = id || '';
-  document.getElementById('formModalSub').textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
-  document.getElementById('submitReservaBtn').textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
+  const alertBox = document.getElementById('formAlert');
+  const form = document.getElementById('reservaForm');
+  const rDate = document.getElementById('reservaDate');
+  const rTurno = document.getElementById('reservaTurno');
+  const rEditId = document.getElementById('reservaEditId');
+  const sub = document.getElementById('formModalSub');
+  const submitBtn = document.getElementById('submitReservaBtn');
+
+  if (alertBox) alertBox.innerHTML = '';
+  if (form) form.reset();
+  if (rDate) rDate.value = date;
+  if (rTurno) rTurno.value = turno;
+  if (rEditId) rEditId.value = id || '';
+  if (sub) sub.textContent = `${fmtFecha(date)} — ${turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}`;
+  if (submitBtn) submitBtn.textContent = mode === 'edit' ? 'Guardar cambios' : 'Confirmar reserva';
 
   const unitSel = document.getElementById('unitSelect');
   const pinInput = document.getElementById('unitPinInput');
-  if (mode === 'edit') {
-    unitSel.value = unitId;
-    unitSel.disabled = true;
-    pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
-  } else {
-    unitSel.disabled = false;
-    pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
-    if (currentPinUnit) unitSel.value = currentPinUnit.id;
+  if (unitSel && pinInput) {
+    if (mode === 'edit') {
+      unitSel.value = unitId;
+      unitSel.disabled = true;
+      pinInput.value = unitPin || (currentPinUnit ? currentPinUnit.pin : '');
+    } else {
+      unitSel.disabled = false;
+      pinInput.value = currentPinUnit ? currentPinUnit.pin : '';
+      if (currentPinUnit) unitSel.value = currentPinUnit.id;
+    }
   }
   toggleOverlay('formOverlay', true);
 }
@@ -242,37 +345,37 @@ function openFormModal({ mode, date, turno, id, unitId, unitPin }) {
 async function onSubmitReserva(e) {
   e.preventDefault();
 
-  // Evitar doble envío si ya está procesando
   if (isSubmittingReservation) return;
   isSubmittingReservation = true;
 
   const submitBtn = document.getElementById('submitReservaBtn');
   const originalBtnText = submitBtn ? submitBtn.textContent : 'Confirmar reserva';
 
-  const date = document.getElementById('reservaDate').value;
-  const turno = document.getElementById('reservaTurno').value;
-  const editId = document.getElementById('reservaEditId').value;
-  const unit_pin = document.getElementById('unitPinInput').value.trim();
-  const unit_id = document.getElementById('unitSelect').value;
-  const nombre = document.getElementById('nombreInput').value.trim();
-  const apellido = document.getElementById('apellidoInput').value.trim();
+  const date = document.getElementById('reservaDate')?.value;
+  const turno = document.getElementById('reservaTurno')?.value;
+  const editId = document.getElementById('reservaEditId')?.value;
+  const unit_pin = document.getElementById('unitPinInput')?.value.trim();
+  const unit_id = document.getElementById('unitSelect')?.value;
+  const nombre = document.getElementById('nombreInput')?.value.trim();
+  const apellido = document.getElementById('apellidoInput')?.value.trim();
   const alertBox = document.getElementById('formAlert');
-  alertBox.innerHTML = '';
 
-  if (!unit_id) { 
-    alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`; 
-    isSubmittingReservation = false; 
-    return; 
+  if (alertBox) alertBox.innerHTML = '';
+
+  if (!unit_id) {
+    if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí una unidad.</div>`;
+    isSubmittingReservation = false;
+    return;
   }
-  if (!/^\d{4}$/.test(unit_pin)) { 
-    alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`; 
-    isSubmittingReservation = false; 
-    return; 
+  if (!/^\d{4}$/.test(unit_pin)) {
+    if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Ingresá el PIN de 4 dígitos de la unidad.</div>`;
+    isSubmittingReservation = false;
+    return;
   }
 
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Guardando reserva...';
+    submitBtn.textContent = 'Guardando...';
   }
 
   try {
@@ -285,7 +388,7 @@ async function onSubmitReserva(e) {
       });
       data = await res.json();
       if (!res.ok) throw data;
-      toast('Reserva actualizada ✔', 'success');
+      toast('Reserva actualizada con éxito ✔', 'success');
     } else {
       res = await fetch('/api/reservations', {
         method: 'POST',
@@ -298,19 +401,17 @@ async function onSubmitReserva(e) {
       currentPinUnit = { id: unit_id, pin: unit_pin };
     }
 
-    // --- CIERRE SEGURO DE AMBOS MODALES ---
     toggleOverlay('formOverlay', false);
     toggleOverlay('dayOverlay', false);
 
-    const form = document.getElementById('reservaForm');
-    if (form) form.reset();
-
+    await loadBlockedDays();
     await loadYear(currentYear);
     renderYearGrid();
     if (currentPinUnit) await loadMisReservas();
-
   } catch (err) {
-    alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Ese turno ya está ocupado. Elegí otro.'}</div>`;
+    if (alertBox) {
+      alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'No se pudo completar la operación.'}</div>`;
+    }
   } finally {
     isSubmittingReservation = false;
     if (submitBtn) {
@@ -353,7 +454,8 @@ async function doCancel(id) {
         confirmBox.remove();
         return; 
       }
-      toast('Reserva cancelada', 'success');
+      toast('Reserva cancelada con éxito', 'success');
+      await loadBlockedDays();
       await loadYear(currentYear);
       renderYearGrid();
       await loadMisReservas();
@@ -368,18 +470,23 @@ async function doCancel(id) {
   });
 }
 
-// ---------- Mis reservas (unidad + PIN) ----------
+// ---------- Mis reservas ----------
 function setupPinForm() {
   const pinForm = document.getElementById('pinForm');
+  const misLockBtn = document.getElementById('misLockBtn');
+
   if (pinForm) {
     pinForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const unitId = document.getElementById('misUnitSelect').value;
-      const pin = document.getElementById('misPinInput').value.trim();
+      const unitId = document.getElementById('misUnitSelect')?.value;
+      const pin = document.getElementById('misPinInput')?.value.trim();
       const alertBox = document.getElementById('pinAlert');
       if (alertBox) alertBox.innerHTML = '';
 
-      if (!unitId) { if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; return; }
+      if (!unitId) { 
+        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">Elegí tu unidad.</div>`; 
+        return; 
+      }
 
       const res = await fetch(`/api/units/${unitId}/verify-pin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
@@ -392,20 +499,28 @@ function setupPinForm() {
 
       const unit = units.find(u => String(u.unidad) === String(unitId) || String(u.id) === String(unitId));
       currentPinUnit = { id: unitId, pin };
-      document.getElementById('pinAccessCard').style.display = 'none';
-      document.getElementById('pinUnlockedWrap').style.display = '';
-      document.getElementById('misUnitTitle').textContent = unit ? unitLabel(unit) : 'Unidad';
+      
+      const pinAccCard = document.getElementById('pinAccessCard');
+      const pinUnlWrap = document.getElementById('pinUnlockedWrap');
+      const misUnTitle = document.getElementById('misUnitTitle');
+
+      if (pinAccCard) pinAccCard.style.display = 'none';
+      if (pinUnlWrap) pinUnlWrap.style.display = '';
+      if (misUnTitle) misUnTitle.textContent = unit ? unitLabel(unit) : 'Unidad';
       await loadMisReservas();
     });
   }
 
-  const misLockBtn = document.getElementById('misLockBtn');
   if (misLockBtn) {
     misLockBtn.addEventListener('click', () => {
       currentPinUnit = null;
-      document.getElementById('pinAccessCard').style.display = '';
-      document.getElementById('pinUnlockedWrap').style.display = 'none';
-      document.getElementById('misPinInput').value = '';
+      const pinAccCard = document.getElementById('pinAccessCard');
+      const pinUnlWrap = document.getElementById('pinUnlockedWrap');
+      const misPinInput = document.getElementById('misPinInput');
+
+      if (pinAccCard) pinAccCard.style.display = '';
+      if (pinUnlWrap) pinUnlWrap.style.display = 'none';
+      if (misPinInput) misPinInput.value = '';
     });
   }
 }
@@ -419,6 +534,7 @@ async function loadMisReservas() {
 function renderMisReservas(list) {
   const cont = document.getElementById('misReservasList');
   if (!cont) return;
+
   if (!list.length) {
     cont.innerHTML = `<div class="empty-state"><div class="big">📅</div>Esta unidad todavía no tiene reservas.</div>`;
     return;
@@ -429,7 +545,7 @@ function renderMisReservas(list) {
     <div class="mr-item">
       <div class="info">
         <b>${fmtFecha(r.date)} — ${r.turno === 'dia' ? 'Turno Día ☀️' : 'Turno Noche 🌙'}</b>
-        ${r.nombre} ${r.apellido}
+        ${r.nombre || ''} ${r.apellido || ''}
       </div>
       <div class="mr-actions">
         ${!isPast ? `
