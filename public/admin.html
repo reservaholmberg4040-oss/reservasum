@@ -16,15 +16,15 @@
     
     /* Formularios y controles en línea */
     .block-day-form, .reports-controls, .excel-import-box { display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px; }
-    .form-group { display: flex; flexDirection: column; }
+    .form-group { display: flex; flex-direction: column; }
     .form-group label { font-size: 0.85rem; margin-bottom: 4px; font-weight: 500; color: #4b5563; }
     .form-group input { padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; }
     .flex-grow { flex: 1; min-width: 200px; }
     
     /* Botones */
-    .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: white; }
+    .btn { padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.9rem; color: white; display: inline-flex; align-items: center; justify-content: center; }
     .btn-primary { background: #4f46e5; }
-    .btn-secondary { background: #6b7280; }
+    .btn-secondary { background: #6b7280; color: white; text-decoration: none; }
     .btn-success { background: #10b981; }
     .btn-danger { background: #ef4444; }
     .btn-danger-dark { background: #991b1b; }
@@ -55,7 +55,10 @@
   <div class="admin-container">
     <header class="admin-header">
       <h1>Panel de Administración</h1>
-      <button id="logout-btn" class="btn btn-secondary">Cerrar Sesión</button>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <a href="/" class="btn btn-secondary">← Ir al Calendario</a>
+        <button id="logout-btn" class="btn btn-secondary" style="background: #6b7280; border: none;">Cerrar Sesión</button>
+      </div>
     </header>
 
     <!-- Sección de Bloqueo de Días -->
