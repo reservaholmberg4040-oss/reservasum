@@ -174,7 +174,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: `No se puede reservar con más de ${maxDiasAnticipacion} días de anticipación.` });
     }
 
-    if (diferenciaDias < minDiasAnticipacion) {
+    if (diferenciaDias <= minDiasAnticipacion) {
       return res.status(400).json({ error: `La reserva debe realizarse con al menos ${minDiasAnticipacion} días de anticipación.` });
     }
     // ------------------------------------
