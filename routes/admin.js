@@ -3,16 +3,70 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const xlsx = require('xlsx');
+const fs = require('fs');
+const path = require('path');
 const db = require('../db'); 
 const { buildMonthlyReport } = require('../utils/report'); 
 const { sendMonthlyReport, previousMonthPeriod } = require('../utils/mailer');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
+
+function readBlockedDays() {
+  try {
+    if (!fs.existsSync(blockedDaysFile)) return [];
+    const data = fs.readFileSync(blockedDaysFile, 'utf8');
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error('Error leyendo blocked-days.json:', err);
+    return [];
+  }
+}
+
+function writeBlockedDays(data) {
+  try {
+    const dir = path.dirname(blockedDaysFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(blockedDaysFile, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error escribiendo blocked-days.json:', err);
+    throw err;
+  }
+}
+
 function requireAdmin(req, res, next) {
   if (req.session && req.session.isAdmin) return next();
   return res.status(401).json({ error: 'No autenticado.' });
 }
+
+// --- Endpoints para Días Bloqueados ---
+router.get('/blocked-days', requireAdmin, (req, res) => {
+  res.json(readBlockedDays());
+});
+
+router.post('/blocked-days', requireAdmin, (req, res) => {
+  const { date, reason } = req.body;
+  if (!date) return res.status(400).json({ error: 'La fecha es obligatoria.' });
+
+  let blocked = readBlockedDays();
+  blocked = blocked.filter(b => b.date !== date);
+  blocked.push({ date, reason: reason ? String(reason).trim() : 'Mantenimiento del SUM' });
+  writeBlockedDays(blocked);
+
+  res.json({ success: true, message: 'Día bloqueado correctamente.' });
+});
+
+router.delete('/blocked-days/:date', requireAdmin, (req, res) => {
+  const { date } = req.params;
+  let blocked = readBlockedDays();
+  blocked = blocked.filter(b => b.date !== date);
+  writeBlockedDays(blocked);
+
+  res.json({ success: true, message: 'Bloqueo removido.' });
+});
+// -------------------------------------
 
 router.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -131,7 +185,6 @@ router.put('/units/:id/propietario', requireAdmin, (req, res) => {
   res.json(unit);
 });
 
-// --- RUTA PARA ACTUALIZAR EMAIL DESDE LA TABLA ---
 router.put('/units/:id/email', requireAdmin, (req, res) => {
   const { email } = req.body;
   const unit = (db.units && typeof db.units.setEmail === 'function') ? db.units.setEmail(req.params.id, email) : null;
