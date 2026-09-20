@@ -8,6 +8,8 @@ const db = require('./db');
 const unitsRouter = require('./routes/units');
 const reservationsRouter = require('./routes/reservations');
 const adminRouter = require('./routes/admin');
+// Importamos el middleware requireAdmin desde adminRouter
+const { requireAdmin } = require('./routes/admin');
 const { scheduleMonthlyReport } = require('./utils/mailer');
 
 const app = express();
@@ -30,8 +32,8 @@ app.get('/api/config', (req, res) => {
   res.json({ buildingName: process.env.BUILDING_NAME || 'Holmberg 4040' });
 });
 
-// --- ENDPOINTS DE CONFIGURACIÓN GENERAL ---
-app.get('/api/admin/config', async (req, res) => {
+// --- ENDPOINTS DE CONFIGURACIÓN GENERAL (Protegidos con requireAdmin) ---
+app.get('/api/admin/config', requireAdmin, async (req, res) => {
   try {
     const configFile = path.join(__dirname, 'data', 'config.json');
 
@@ -55,7 +57,7 @@ app.get('/api/admin/config', async (req, res) => {
   }
 });
 
-app.post('/api/admin/config', async (req, res) => {
+app.post('/api/admin/config', requireAdmin, async (req, res) => {
   try {
     const { max_reservas_mes, max_reservas_semana, dias_anticipacion_max, dias_anticipacion_min } = req.body;
     
