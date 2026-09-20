@@ -3,12 +3,12 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const cookieSession = require('cookie-session');
+const helmet = require('helmet'); // <-- 1. Importar helmet
 
 const db = require('./db');
 const unitsRouter = require('./routes/units');
 const reservationsRouter = require('./routes/reservations');
 const adminRouter = require('./routes/admin');
-// Importamos el middleware requireAdmin desde adminRouter
 const { requireAdmin } = require('./routes/admin');
 const { scheduleMonthlyReport } = require('./utils/mailer');
 
@@ -16,6 +16,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
+
+// --- 2. USAR HELMET PARA CABECERAS DE SEGURIDAD ---
+// Nota: configuramos contentSecurityPolicy en false o adaptado si cargás scripts externos (como fuentes de Google, Bootstrap, etc.)
+app.use(helmet({
+  contentSecurityPolicy: false, 
+}));
+
 app.use(express.json());
 
 app.use(cookieSession({
@@ -32,7 +39,7 @@ app.get('/api/config', (req, res) => {
   res.json({ buildingName: process.env.BUILDING_NAME || 'Holmberg 4040' });
 });
 
-// --- ENDPOINTS DE CONFIGURACIÓN GENERAL (Protegidos con requireAdmin) ---
+// --- ENDPOINTS DE CONFIGURACIÓN GENERAL ---
 app.get('/api/admin/config', requireAdmin, async (req, res) => {
   try {
     const configFile = path.join(__dirname, 'data', 'config.json');
@@ -83,7 +90,6 @@ app.post('/api/admin/config', requireAdmin, async (req, res) => {
     res.status(500).json({ success: false, error: 'Error al actualizar la configuración' });
   }
 });
-// ------------------------------------------
 
 app.use('/api/reservations', reservationsRouter);
 app.use('/api/units', unitsRouter);
@@ -96,6 +102,23 @@ app.get('/admin', (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// --- 3. MANEJADOR GLOBAL DE ERRORES (Debe ir al final, después de todas las rutas) ---
+app.use((err, req, res, next) => {
+  console.error('[ERROR NO CAPTURADO]:', err.stack || err);
+  
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(err.status || 500).json({
+    success: false,
+    error: process.env.NODE_ENV === 'production' 
+      = 'Ocurrió un error interno en el servidor.' 
+      = (err.message || 'Error interno')
+  });
+});
+// ----------------------------------------------------------------------------------
 
 app.listen(PORT, () => {
   console.log(`Servidor SUM Holmberg 4040 corriendo en http://localhost:${PORT}`);
