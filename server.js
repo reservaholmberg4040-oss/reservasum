@@ -29,6 +29,60 @@ app.get('/api/config', (req, res) => {
   res.json({ buildingName: process.env.BUILDING_NAME || 'Holmberg 4040' });
 });
 
+// --- ENDPOINTS DE CONFIGURACIÓN GENERAL ---
+app.get('/api/admin/config', async (req, res) => {
+  try {
+    // Asegurar que la tabla exista para evitar errores iniciales
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS configuracion (
+        clave VARCHAR(50) PRIMARY KEY,
+        valor VARCHAR(255) NOT NULL
+      )
+    `);
+
+    const [rows] = await db.query('SELECT clave, valor FROM configuracion');
+    const config = rows.reduce((acc, curr) => {
+      acc[curr.clave] = curr.valor;
+      return acc;
+    }, {});
+
+    res.json({ 
+      success: true, 
+      config: {
+        max_reservas_mes: config.max_reservas_mes || 2,
+        dias_anticipacion_max: config.dias_anticipacion_max || 60,
+        dias_anticipacion_min: config.dias_anticipacion_min !== undefined ? config.dias_anticipacion_min : 0
+      } 
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Error al obtener la configuración' });
+  }
+});
+
+app.post('/api/admin/config', async (req, res) => {
+  try {
+    const { max_reservas_mes, dias_anticipacion_max, dias_anticipacion_min } = req.body;
+    
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS configuracion (
+        clave VARCHAR(50) PRIMARY KEY,
+        valor VARCHAR(255) NOT NULL
+      )
+    `);
+
+    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['max_reservas_mes', max_reservas_mes]);
+    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['dias_anticipacion_max', dias_anticipacion_max]);
+    await db.query('REPLACE INTO configuracion (clave, valor) VALUES (?, ?)', ['dias_anticipacion_min', dias_anticipacion_min]);
+
+    res.json({ success: true, message: 'Configuración guardada con éxito' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: 'Error al actualizar la configuración' });
+  }
+});
+// ------------------------------------------
+
 app.use('/api/reservations', reservationsRouter);
 app.use('/api/units', unitsRouter);
 app.use('/api/admin', adminRouter);
