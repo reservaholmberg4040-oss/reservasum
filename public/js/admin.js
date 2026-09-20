@@ -13,6 +13,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAdminPanel();
 });
 
+// --- Sistema de Notificaciones Elegantes (Toasts) ---
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) {
+    alert(message);
+    return;
+  }
+
+  const toast = document.createElement('div');
+  toast.style.padding = '12px 20px';
+  toast.style.borderRadius = '8px';
+  toast.style.color = '#fff';
+  toast.style.fontSize = '14px';
+  toast.style.fontWeight = '500';
+  toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+  toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+  toast.style.opacity = '0';
+  toast.style.transform = 'translateY(10px)';
+
+  if (type === 'success') {
+    toast.style.backgroundColor = '#10b981'; // Verde moderno
+  } else {
+    toast.style.backgroundColor = '#ef4444'; // Rojo moderno para errores/advertencias
+  }
+
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  }, 10);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
 function showLoginForm() {
   const container = document.body;
   container.innerHTML = `
@@ -63,7 +103,7 @@ function initAdminPanel() {
   loadReportLog();
   loadBlockedDays();
 
-  // Evento para el formulario de bloqueo de días con validación
+  // Bloqueo de días con validación y notificaciones elegantes
   const blockDayForm = document.getElementById('blockDayForm');
   if (blockDayForm) {
     blockDayForm.addEventListener('submit', async (e) => {
@@ -79,16 +119,16 @@ function initAdminPanel() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert('Día bloqueado correctamente.');
+          showToast('Día bloqueado correctamente.', 'success');
           document.getElementById('blockDate').value = '';
           document.getElementById('blockReason').value = '';
           loadBlockedDays();
         } else {
-          // Muestra la advertencia indicando que hay reservas activas en esa fecha
-          alert(data.error || 'No se pudo bloquear el día.');
+          // Muestra el error detallado de reservas existentes de forma elegante
+          showToast(data.error || 'No se pudo bloquear el día.', 'danger');
         }
       } catch (err) {
-        alert('Error de conexión al bloquear el día.');
+        showToast('Error de conexión al bloquear el día.', 'danger');
       }
     });
   }
@@ -122,16 +162,6 @@ function initAdminPanel() {
         period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       }
       window.location.href = `/api/admin/download-report?period=${period}`;
-    });
-  }
-
-  const reportForm = document.getElementById('report-form');
-  if (reportForm) {
-    reportForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const period = monthSelect ? monthSelect.value : '';
-      const recipient = document.getElementById('recipient-email')?.value || '';
-      alert(`Funcionalidad de envío por mail seleccionada para el período ${period} a ${recipient}.`);
     });
   }
 
@@ -175,7 +205,7 @@ function initAdminPanel() {
         const result = await res.json();
 
         if (res.ok && result.success) {
-          showModalFeedback('Unidad agregada correctamente.', 'success');
+          showToast('Unidad agregada correctamente.', 'success');
           addForm.reset();
 
           setTimeout(() => {
@@ -199,7 +229,8 @@ function initAdminPanel() {
       const replaceAll = document.getElementById('chk-replace-all')?.checked || false;
 
       if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        return alert('Por favor seleccioná un archivo Excel.');
+        showToast('Por favor seleccioná un archivo Excel.', 'danger');
+        return;
       }
 
       const formData = new FormData();
@@ -213,16 +244,16 @@ function initAdminPanel() {
 
         const result = await res.json();
         if (res.ok && result.success) {
-          alert(result.message || 'Importación completada.');
+          showToast(result.message || 'Importación completada.', 'success');
           fileInput.value = '';
           const chk = document.getElementById('chk-replace-all');
           if (chk) chk.checked = false;
           loadUnits();
         } else {
-          alert('Error: ' + (result.error || 'No se pudo importar.'));
+          showToast('Error: ' + (result.error || 'No se pudo importar.'), 'danger');
         }
       } catch (err) {
-        alert('Error al subir el archivo Excel.');
+        showToast('Error al subir el archivo Excel.', 'danger');
       }
     });
   }
@@ -239,7 +270,10 @@ function initAdminPanel() {
   if (btnDeleteSel) {
     btnDeleteSel.addEventListener('click', async () => {
       const checkedBoxes = Array.from(document.querySelectorAll('.unit-checkbox:checked'));
-      if (checkedBoxes.length === 0) return alert('No seleccionaste ninguna unidad.');
+      if (checkedBoxes.length === 0) {
+        showToast('No seleccionaste ninguna unidad.', 'danger');
+        return;
+      }
 
       const idsToDelete = checkedBoxes.map(cb => cb.value);
 
@@ -254,12 +288,13 @@ function initAdminPanel() {
           const result = await res.json();
           if (res.ok && result.success) {
             if (selectAll) selectAll.checked = false;
+            showToast('Unidades eliminadas correctamente.', 'success');
             loadUnits();
           } else {
-            alert('Error: ' + (result.error || 'No se pudieron eliminar.'));
+            showToast('Error: ' + (result.error || 'No se pudieron eliminar.'), 'danger');
           }
         } catch (err) {
-          alert('Error de conexión.');
+          showToast('Error de conexión.', 'danger');
         }
       }
     });
@@ -279,12 +314,13 @@ function initAdminPanel() {
 
           const result = await res.json();
           if (res.ok && result.success) {
+            showToast('Todas las unidades fueron eliminadas.', 'success');
             loadUnits();
           } else {
-            alert('Error: ' + (result.error || 'No se pudieron eliminar.'));
+            showToast('Error: ' + (result.error || 'No se pudieron eliminar.'), 'danger');
           }
         } catch (err) {
-          alert('Error de conexión.');
+          showToast('Error de conexión.', 'danger');
         }
       }
     });
@@ -324,12 +360,13 @@ window.unblockDay = async function(date) {
       method: 'DELETE'
     });
     if (res.ok) {
+      showToast('Bloqueo removido con éxito.', 'success');
       loadBlockedDays();
     } else {
-      alert('Error al quitar el bloqueo.');
+      showToast('Error al quitar el bloqueo.', 'danger');
     }
   } catch (err) {
-    alert('Error de conexión.');
+    showToast('Error de conexión.', 'danger');
   }
 };
 
@@ -437,7 +474,7 @@ async function loadUnits() {
 
 window.updatePin = async (unitId, newPin) => {
   if (!/^\d{4}$/.test(newPin)) {
-    alert('El PIN debe tener exactamente 4 dígitos numéricos.');
+    showToast('El PIN debe tener exactamente 4 dígitos numéricos.', 'danger');
     return loadUnits();
   }
 
@@ -448,20 +485,22 @@ window.updatePin = async (unitId, newPin) => {
       body: JSON.stringify({ pin: newPin })
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      showToast('PIN actualizado correctamente.', 'success');
+    } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo guardar el PIN.'));
+      showToast('Error: ' + (err.error || 'No se pudo guardar el PIN.'), 'danger');
       loadUnits();
     }
   } catch (err) {
-    alert('Error al conectar con el servidor.');
+    showToast('Error al conectar con el servidor.', 'danger');
     loadUnits();
   }
 };
 
 window.updatePropietario = async (unitId, newOwner) => {
   if (!newOwner.trim()) {
-    alert('El propietario no puede quedar vacío.');
+    showToast('El propietario no puede quedar vacío.', 'danger');
     return loadUnits();
   }
 
@@ -472,13 +511,15 @@ window.updatePropietario = async (unitId, newOwner) => {
       body: JSON.stringify({ propietario: newOwner })
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      showToast('Propietario actualizado con éxito.', 'success');
+    } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo guardar el propietario.'));
+      showToast('Error: ' + (err.error || 'No se pudo guardar el propietario.'), 'danger');
       loadUnits();
     }
   } catch (err) {
-    alert('Error al conectar con el servidor.');
+    showToast('Error al conectar con el servidor.', 'danger');
     loadUnits();
   }
 };
@@ -491,13 +532,15 @@ window.updateEmail = async (unitId, newEmail) => {
       body: JSON.stringify({ email: newEmail })
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      showToast('Correo electrónico actualizado.', 'success');
+    } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo guardar el email.'));
+      showToast('Error: ' + (err.error || 'No se pudo guardar el email.'), 'danger');
       loadUnits();
     }
   } catch (err) {
-    alert('Error al conectar con el servidor.');
+    showToast('Error al conectar con el servidor.', 'danger');
     loadUnits();
   }
 };
@@ -509,13 +552,14 @@ window.regeneratePin = async (unitId) => {
     });
 
     if (res.ok) {
+      showToast('PIN regenerado con éxito.', 'success');
       loadUnits();
     } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo regenerar.'));
+      showToast('Error: ' + (err.error || 'No se pudo regenerar.'), 'danger');
     }
   } catch (err) {
-    alert('Error al conectar con el servidor.');
+    showToast('Error al conectar con el servidor.', 'danger');
   }
 };
 
@@ -527,16 +571,18 @@ async function updateUnitBaja(unitId, isBaja) {
       body: JSON.stringify({ baja: isBaja })
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      showToast(isBaja ? 'Unidad dada de baja correctamente.' : 'Unidad reactivada.', 'success');
+    } else {
       const err = await res.json();
       const cb = document.querySelector(`.unit-baja-checkbox[data-unit-id="${unitId}"]`);
       if (cb) cb.checked = !isBaja; 
-      alert('Error: ' + (err.error || 'No se pudo actualizar el estado de la unidad.'));
+      showToast('Error: ' + (err.error || 'No se pudo actualizar el estado de la unidad.'), 'danger');
     }
   } catch (err) {
     const cb = document.querySelector(`.unit-baja-checkbox[data-unit-id="${unitId}"]`);
     if (cb) cb.checked = !isBaja;
-    alert('Error al conectar con el servidor.');
+    showToast('Error al conectar con el servidor.', 'danger');
   }
 }
 
