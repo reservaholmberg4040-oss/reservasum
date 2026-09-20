@@ -99,4 +99,3 @@ app.listen(PORT, () => {
   console.log(`Servidor SUM Holmberg 4040 corriendo en http://localhost:${PORT}`);
   scheduleMonthlyReport();
 });
-```[cite: 3]
