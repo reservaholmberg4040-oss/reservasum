@@ -77,11 +77,16 @@ router.get('/calendar-data', requireAdmin, (req, res) => {
   }
 });
 
-// --- Endpoints de Logs de Auditoría con Filtros de Fecha ---
+// --- Endpoints de Logs de Auditoría con Filtros de Fecha Blindados ---
 router.get('/audit-logs', requireAdmin, (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    let { startDate, endDate } = req.query;
     let logs = db.auditLogs.all();
+
+    // Validar formato estricto YYYY-MM-DD para seguridad informática
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (startDate && !dateRegex.test(startDate)) startDate = null;
+    if (endDate && !dateRegex.test(endDate)) endDate = null;
 
     if (startDate) {
       logs = logs.filter(l => l.timestamp.slice(0, 10) >= startDate);
@@ -99,8 +104,13 @@ router.get('/audit-logs', requireAdmin, (req, res) => {
 
 router.get('/audit-logs/download', requireAdmin, (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    let { startDate, endDate } = req.query;
     let logs = db.auditLogs.all();
+
+    // Validar formato estricto YYYY-MM-DD para seguridad informática
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (startDate && !dateRegex.test(startDate)) startDate = null;
+    if (endDate && !dateRegex.test(endDate)) endDate = null;
 
     if (startDate) {
       logs = logs.filter(l => l.timestamp.slice(0, 10) >= startDate);
@@ -130,7 +140,7 @@ router.get('/audit-logs/download', requireAdmin, (req, res) => {
     res.status(500).json({ error: 'Error al generar la descarga de logs.' });
   }
 });
-// ------------------------------------------------------------
+// -------------------------------------------------------------------
 
 // --- Endpoints para Días Bloqueados con Validación de Reservas ---
 router.get('/blocked-days', requireAdmin, (req, res) => {
