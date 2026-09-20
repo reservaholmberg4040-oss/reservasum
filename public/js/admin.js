@@ -110,6 +110,7 @@ function initAdminPanel() {
     configForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const max_reservas_mes = document.getElementById('input-max-reservas').value;
+      const max_reservas_semana = document.getElementById('input-max-reservas-semana').value;
       const dias_anticipacion_max = document.getElementById('input-dias-max').value;
       const dias_anticipacion_min = document.getElementById('input-dias-min').value;
 
@@ -117,7 +118,12 @@ function initAdminPanel() {
         const res = await fetch('/api/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ max_reservas_mes, dias_anticipacion_max, dias_anticipacion_min })
+          body: JSON.stringify({ 
+            max_reservas_mes, 
+            max_reservas_semana, 
+            dias_anticipacion_max, 
+            dias_anticipacion_min 
+          })
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -362,10 +368,12 @@ async function loadConfig() {
     const data = await res.json();
     if (data.success && data.config) {
       const maxResInput = document.getElementById('input-max-reservas');
+      const maxResSemanaInput = document.getElementById('input-max-reservas-semana');
       const maxAntInput = document.getElementById('input-dias-max');
       const minAntInput = document.getElementById('input-dias-min');
 
-      if (maxResInput) maxResInput.value = data.config.max_reservas_mes || 2;
+      if (maxResInput) maxResInput.value = data.config.max_reservas_mes || 4;
+      if (maxResSemanaInput) maxResSemanaInput.value = data.config.max_reservas_semana || 1;
       if (maxAntInput) maxAntInput.value = data.config.dias_anticipacion_max || 60;
       if (minAntInput) minAntInput.value = data.config.dias_anticipacion_min !== undefined ? data.config.dias_anticipacion_min : 0;
     }
