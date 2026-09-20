@@ -85,6 +85,36 @@
       </form>
     </section>
 
+    <!-- Sección de Vista de Calendario Interactiva -->
+    <section class="admin-section">
+      <div class="section-header-actions">
+        <h2>Calendario Visual de Ocupación</h2>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="cal-prev-month" class="btn btn-secondary">◀ Mes Anterior</button>
+          <span id="cal-current-month-label" style="font-weight: bold; font-size: 1.1rem; min-width: 150px; text-align: center;">Mes / Año</span>
+          <button id="cal-next-month" class="btn btn-secondary">Mes Siguiente ▶</button>
+        </div>
+      </div>
+      
+      <!-- Leyenda de colores -->
+      <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 0.85rem; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #d1fae5; border: 1px solid #10b981; display: inline-block; border-radius: 3px;"></span> Libre</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #fee2e2; border: 1px solid #ef4444; display: inline-block; border-radius: 3px;"></span> Reservado</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #f3f4f6; border: 1px solid #9ca3af; display: inline-block; border-radius: 3px;"></span> Bloqueado</div>
+      </div>
+
+      <!-- Cuadrícula del Calendario -->
+      <div id="admin-calendar-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center;">
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Dom</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Lun</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Mar</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Mié</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Jue</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Vie</div>
+        <div style="font-weight: bold; color: #4b5563; padding: 6px;">Sáb</div>
+      </div>
+    </section>
+
     <!-- Sección de Bloqueo de Días -->
     <section class="admin-section">
       <h2>Bloquear Días del Calendario</h2>
@@ -221,22 +251,135 @@
   <!-- CONTENEDOR PARA LAS NOTIFICACIONES FLOTANTES (TOASTS) -->
   <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
 
-  <!-- Script de administración -->
+  <!-- Script principal de administración -->
   <script src="/js/admin.js"></script>
 
-  <!-- Script menor para manejar la visibilidad del modal y la carga de config -->
+  <!-- Script para la lógica del Calendario Visual Admin -->
   <script>
-    const modalEl = document.getElementById('add-unit-modal');
-    if (modalEl) {
-      const observer = new MutationObserver(() => {
-        if (modalEl.classList.contains('active')) {
-          modalEl.style.display = 'flex';
-        } else {
-          modalEl.style.display = 'none';
-        }
-      });
-      observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
+    let currentCalDate = new Date();
+
+    async function loadAdminCalendar() {
+      const year = currentCalDate.getFullYear();
+      const month = currentCalDate.getMonth() + 1;
+      
+      const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+      const labelEl = document.getElementById('cal-current-month-label');
+      if (labelEl) labelEl.textContent = `${monthNames[month - 1]} ${year}`;
+
+      try {
+        const res = await fetch(`/api/admin/calendar-data?year=${year}&month=${month}`);
+        const data = await res.json();
+        
+        if (!data.success) return;
+
+        renderCalendarGrid(year, month, data.reservations, data.blockedDays);
+      } catch (err) {
+        console.error('Error cargando calendario admin:', err);
+      }
     }
+
+    function renderCalendarGrid(year, month, reservations, blockedDays) {
+      const grid = document.getElementById('admin-calendar-grid');
+      if (!grid) return;
+
+      const headers = Array.from(grid.children).slice(0, 7);
+      grid.innerHTML = '';
+      headers.forEach(h => grid.appendChild(h));
+
+      const firstDayIndex = new Date(year, month - 1, 1).getDay();
+      const totalDays = new Date(year, month, 0).getDate();
+
+      for (let i = 0; i < firstDayIndex; i++) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.padding = '15px';
+        grid.appendChild(emptyDiv);
+      }
+
+      for (let day = 1; day <= totalDays; day++) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        const dayDiv = document.createElement('div');
+        dayDiv.style.cssText = "padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; min-height: 70px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s;";
+
+        const isBlocked = blockedDays.some(b => b.date === dateStr);
+        const dayRes = reservations.filter(r => r && String(r.date).trim() === dateStr);
+
+        if (isBlocked) {
+          dayDiv.style.background = '#f3f4f6';
+          dayDiv.style.borderColor = '#9ca3af';
+          dayDiv.title = "Día bloqueado por mantenimiento";
+        } else if (dayRes.length > 0) {
+          dayDiv.style.background = '#fee2e2';
+          dayDiv.style.borderColor = '#ef4444';
+          dayDiv.title = `Reservado por Unidad(es): ${dayRes.map(r => r.unit_id).join(', ')}`;
+        } else {
+          dayDiv.style.background = '#d1fae5';
+          dayDiv.style.borderColor = '#10b981';
+          dayDiv.title = "Disponible";
+        }
+
+        const numberSpan = document.createElement('span');
+        numberSpan.textContent = day;
+        numberSpan.style.fontWeight = 'bold';
+        dayDiv.appendChild(numberSpan);
+
+        if (dayRes.length > 0) {
+          const badge = document.createElement('span');
+          badge.textContent = `U: ${dayRes.map(r => r.unit_id).join(',')}`;
+          badge.style.cssText = "font-size: 0.7rem; background: #ef4444; color: white; padding: 2px 4px; border-radius: 3px; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+          dayDiv.appendChild(badge);
+        } else if (isBlocked) {
+          const badge = document.createElement('span');
+          badge.textContent = "Bloqueado";
+          badge.style.cssText = "font-size: 0.7rem; background: #9ca3af; color: white; padding: 2px 4px; border-radius: 3px; margin-top: 4px;";
+          dayDiv.appendChild(badge);
+        }
+
+        dayDiv.addEventListener('click', () => {
+          const dateInput = document.getElementById('blockDate');
+          if (dateInput) {
+            dateInput.value = dateStr;
+            dateInput.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+
+        grid.appendChild(dayDiv);
+      }
+    }
+
+    const prevBtn = document.getElementById('cal-prev-month');
+    const nextBtn = document.getElementById('cal-next-month');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        currentCalDate.setMonth(currentCalDate.getMonth() - 1);
+        loadAdminCalendar();
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        currentCalDate.setMonth(currentCalDate.getMonth() + 1);
+        loadAdminCalendar();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadAdminCalendar();
+
+      // Observer auxiliar para modales
+      const modalEl = document.getElementById('add-unit-modal');
+      if (modalEl) {
+        const observer = new MutationObserver(() => {
+          if (modalEl.classList.contains('active')) {
+            modalEl.style.display = 'flex';
+          } else {
+            modalEl.style.display = 'none';
+          }
+        });
+        observer.observe(modalEl, { attributes: true, attributeFilter: ['class'] });
+      }
+    });
   </script>
 </body>
 </html>
