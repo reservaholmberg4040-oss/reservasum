@@ -7,6 +7,7 @@ const { sendReservationConfirmation } = require('../utils/mailer');
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
+const configFile = path.join(__dirname, '../data/config.json');
 
 function readReservations() {
   try {
@@ -39,6 +40,18 @@ function readBlockedDays() {
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     return [];
+  }
+}
+
+function readConfig() {
+  try {
+    if (!fs.existsSync(configFile)) {
+      return { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+    }
+    const data = fs.readFileSync(configFile, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    return { max_reservas_mes: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
   }
 }
 
@@ -129,6 +142,27 @@ router.post('/', async (req, res) => {
 
     let reservations = readReservations();
 
+    // --- VALIDACIÓN DE LÍMITE DE RESERVAS POR MES ---
+    const config = readConfig();
+    const maxReservasMes = Number(config.max_reservas_mes) || 1;
+    
+    const targetMonthYear = String(date).trim().slice(0, 7);
+    const unitIdentifier = String(targetUnit.unidad || targetUnit.id).trim();
+
+    const reservasDelMesUsuario = reservations.filter(r => {
+      if (!r) return false;
+      const rUnit = String(r.unit_id || '').trim();
+      const rDate = String(r.date || '').trim();
+      return rUnit === unitIdentifier && rDate.startsWith(targetMonthYear);
+    });
+
+    if (reservasDelMesUsuario.length >= maxReservasMes) {
+      return res.status(400).json({ 
+        error: `Has superado el límite de reservas permitidas para este mes (${maxReservasMes} por mes).` 
+      });
+    }
+    // ----------------------------------------------
+
     const occupied = reservations.some(r => {
       if (!r) return false;
       const rDate = String(r.date || '').trim();
@@ -145,7 +179,7 @@ router.post('/', async (req, res) => {
 
     const newReservation = {
       id: Date.now().toString(),
-      unit_id: String(targetUnit.unidad || targetUnit.id),
+      unit_id: unitIdentifier,
       piso: String(targetUnit.piso || ''),
       depto: String(deptoVal),
       dto: String(deptoVal),
@@ -168,7 +202,7 @@ router.post('/', async (req, res) => {
           await sendReservationConfirmation(targetUnit.email, {
             date,
             turno,
-            unidad: targetUnit.unidad || targetUnit.id,
+            unidad: unitIdentifier,
             piso: targetUnit.piso,
             dto: deptoVal,
             propietario: targetUnit.propietario
