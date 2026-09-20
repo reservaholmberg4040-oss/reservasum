@@ -85,6 +85,14 @@ function normalizeStr(str) {
     .trim();
 }
 
+// Función para sanitizar campos de texto (eliminar etiquetas HTML básicas / scripts)
+function sanitizeText(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[<>]/g, '')
+    .trim();
+}
+
 // Función auxiliar para obtener el rango de la semana (Lunes a Domingo) de una fecha
 function getWeekRange(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
@@ -144,6 +152,17 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
     }
 
+    // Sanitización y validación estricta de Nombre y Apellido
+    const cleanNombre = sanitizeText(nombre);
+    const cleanApellido = sanitizeText(apellido);
+
+    if (!cleanNombre || cleanNombre.length < 2 || cleanNombre.length > 50) {
+      return res.status(400).json({ error: 'El nombre es obligatorio y debe tener entre 2 y 50 caracteres.' });
+    }
+    if (!cleanApellido || cleanApellido.length < 2 || cleanApellido.length > 50) {
+      return res.status(400).json({ error: 'El apellido es obligatorio y debe tener entre 2 y 50 caracteres.' });
+    }
+
     // Validar si el día está bloqueado
     const blockedDays = readBlockedDays();
     const blockInfo = blockedDays.find(b => b.date === String(date).trim());
@@ -173,7 +192,7 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
-    // Validación estricta: PIN obligatorio, compuesto únicamente por números y coincidente
+    // Validación estricta: PIN obligatorio, numérico y coincidente
     if (!providedPin || !/^\d+$/.test(providedPin) || storedPin !== providedPin) {
       return res.status(400).json({ error: 'El PIN debe ser numérico y es incorrecto o está vacío.' });
     }
@@ -270,8 +289,8 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       depto: String(deptoVal),
       dto: String(deptoVal),
       propietario: String(targetUnit.propietario || ''),
-      nombre: String(nombre || '').trim(),
-      apellido: String(apellido || '').trim(),
+      nombre: cleanNombre,
+      apellido: cleanApellido,
       date: String(date).trim(),
       turno: String(turno).trim(),
       createdAt: new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).replace(' ', 'T') + '-03:00'
@@ -351,12 +370,22 @@ router.put('/:id', pinLimiter, async (req, res) => {
       }
     }
 
+    const cleanNombre = nombre !== undefined ? sanitizeText(nombre) : currentRes.nombre;
+    const cleanApellido = apellido !== undefined ? sanitizeText(apellido) : currentRes.apellido;
+
+    if (nombre !== undefined && (cleanNombre.length < 2 || cleanNombre.length > 50)) {
+      return res.status(400).json({ error: 'El nombre debe tener entre 2 y 50 caracteres.' });
+    }
+    if (apellido !== undefined && (cleanApellido.length < 2 || cleanApellido.length > 50)) {
+      return res.status(400).json({ error: 'El apellido debe tener entre 2 y 50 caracteres.' });
+    }
+
     reservations[index] = {
       ...currentRes,
       date: date ? String(date).trim() : currentRes.date,
       turno: turno ? String(turno).trim() : currentRes.turno,
-      nombre: nombre !== undefined ? String(nombre).trim() : currentRes.nombre,
-      apellido: apellido !== undefined ? String(apellido).trim() : currentRes.apellido
+      nombre: cleanNombre,
+      apellido: cleanApellido
     };
 
     writeReservations(reservations);
