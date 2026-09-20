@@ -6,6 +6,7 @@ const db = require('../db');
 const { sendReservationConfirmation } = require('../utils/mailer');
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
+const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 
 function readReservations() {
   try {
@@ -30,6 +31,17 @@ function writeReservations(data) {
   }
 }
 
+function readBlockedDays() {
+  try {
+    if (!fs.existsSync(blockedDaysFile)) return [];
+    const data = fs.readFileSync(blockedDaysFile, 'utf8');
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
 function normalizeStr(str) {
   if (!str) return '';
   return String(str)
@@ -39,7 +51,12 @@ function normalizeStr(str) {
     .trim();
 }
 
-// GET /api/reservations — Soporta filtros exactos por ?year=YYYY y ?unit_id=X
+// Endpoint público para consultar los días bloqueados desde el frontend
+router.get('/blocked-days', (req, res) => {
+  res.json(readBlockedDays());
+});
+
+// GET /api/reservations
 router.get('/', (req, res) => {
   try {
     let reservations = readReservations();
@@ -65,7 +82,7 @@ router.get('/', (req, res) => {
   }
 });
 
-// POST /api/reservations — Crear reserva de forma inmediata y enviar mail en segundo plano
+// POST /api/reservations
 router.post('/', async (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -75,6 +92,15 @@ router.post('/', async (req, res) => {
     }
     if (!date || !turno) {
       return res.status(400).json({ error: 'Fecha y turno son obligatorios.' });
+    }
+
+    // Validar si el día está bloqueado por mantenimiento u otro motivo
+    const blockedDays = readBlockedDays();
+    const blockInfo = blockedDays.find(b => b.date === String(date).trim());
+    if (blockInfo) {
+      return res.status(400).json({ 
+        error: `No se puede reservar este día. Motivo: ${blockInfo.reason || 'Mantenimiento del SUM'}` 
+      });
     }
 
     const units = db.units.all();
@@ -103,7 +129,6 @@ router.post('/', async (req, res) => {
 
     let reservations = readReservations();
 
-    // Comprobación exacta de disponibilidad por fecha y turno normalizado
     const occupied = reservations.some(r => {
       if (!r) return false;
       const rDate = String(r.date || '').trim();
@@ -123,7 +148,7 @@ router.post('/', async (req, res) => {
       unit_id: String(targetUnit.unidad || targetUnit.id),
       piso: String(targetUnit.piso || ''),
       depto: String(deptoVal),
-      dto: String(deptoVal), // Compatibilidad
+      dto: String(deptoVal),
       propietario: String(targetUnit.propietario || ''),
       nombre: String(nombre || '').trim(),
       apellido: String(apellido || '').trim(),
@@ -135,10 +160,8 @@ router.post('/', async (req, res) => {
     reservations.push(newReservation);
     writeReservations(reservations);
 
-    // Responder inmediatamente al navegador para evitar demoras visuales
     res.json({ ok: true, success: true, reservation: newReservation });
 
-    // Enviar correo electrónico en segundo plano de forma no bloqueante
     if (targetUnit.email && targetUnit.email.includes('@')) {
       setImmediate(async () => {
         try {
@@ -163,7 +186,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/reservations/:id — Actualizar reserva existente
+// PUT /api/reservations/:id
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -177,6 +200,17 @@ router.put('/:id', async (req, res) => {
     }
 
     const currentRes = reservations[index];
+
+    if (date) {
+      const blockedDays = readBlockedDays();
+      const blockInfo = blockedDays.find(b => b.date === String(date).trim());
+      if (blockInfo) {
+        return res.status(400).json({ 
+          error: `No se puede mover la reserva a este día. Motivo: ${blockInfo.reason || 'Mantenimiento del SUM'}` 
+        });
+      }
+    }
+
     const units = db.units.all();
     const targetUnit = units.find(u => String(u.unidad || u.id) === String(currentRes.unit_id));
 
@@ -214,7 +248,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/reservations/:id — Eliminar reserva validando PIN
+// DELETE /api/reservations/:id
 router.delete('/:id', (req, res) => {
   try {
     const { id } = req.params;
