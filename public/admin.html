@@ -98,7 +98,7 @@
       
       <!-- Leyenda de colores -->
       <div style="display: flex; gap: 15px; margin-bottom: 15px; font-size: 0.85rem; align-items: center; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #d1fae5; border: 1px solid #10b981; display: inline-block; border-radius: 3px;"></span> Libre</div>
+        <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #dcfce7; border: 1px solid #166534; display: inline-block; border-radius: 3px;"></span> Libre</div>
         <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #fee2e2; border: 1px solid #ef4444; display: inline-block; border-radius: 3px;"></span> Reservado</div>
         <div style="display: flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 14px; background: #f3f4f6; border: 1px solid #9ca3af; display: inline-block; border-radius: 3px;"></span> Bloqueado</div>
       </div>
@@ -254,7 +254,7 @@
   <!-- Script principal de administración -->
   <script src="/js/admin.js"></script>
 
-  <!-- Script para la lógica del Calendario Visual Admin -->
+  <!-- Script para la lógica del Calendario Visual Admin con turnos diferenciados -->
   <script>
     let currentCalDate = new Date();
 
@@ -299,42 +299,69 @@
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         
         const dayDiv = document.createElement('div');
-        dayDiv.style.cssText = "padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; min-height: 70px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s;";
+        dayDiv.style.cssText = "padding: 6px; border-radius: 6px; border: 1px solid #e5e7eb; min-height: 85px; display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; cursor: pointer; background: #fff; transition: all 0.2s;";
 
         const isBlocked = blockedDays.some(b => b.date === dateStr);
         const dayRes = reservations.filter(r => r && String(r.date).trim() === dateStr);
 
+        // Identificar reservas por turno (ajustado según identificador de turno del sistema)
+        const resDia = dayRes.find(r => String(r.turno).toLowerCase().includes('dia') || String(r.turno).toLowerCase().includes('mañana') || String(r.turno) === '1');
+        const resNoche = dayRes.find(r => String(r.turno).toLowerCase().includes('noche') || String(r.turno) === '2');
+
         if (isBlocked) {
           dayDiv.style.background = '#f3f4f6';
           dayDiv.style.borderColor = '#9ca3af';
-          dayDiv.title = "Día bloqueado por mantenimiento";
         } else if (dayRes.length > 0) {
-          dayDiv.style.background = '#fee2e2';
-          dayDiv.style.borderColor = '#ef4444';
-          dayDiv.title = `Reservado por Unidad(es): ${dayRes.map(r => r.unit_id).join(', ')}`;
+          dayDiv.style.background = '#fff5f5';
+          dayDiv.style.borderColor = '#fca5a5';
         } else {
-          dayDiv.style.background = '#d1fae5';
-          dayDiv.style.borderColor = '#10b981';
-          dayDiv.title = "Disponible";
+          dayDiv.style.background = '#ffffff';
+          dayDiv.style.borderColor = '#e5e7eb';
         }
 
+        // Cabecera del día (Número)
+        const headerRow = document.createElement('div');
+        headerRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 3px; margin-bottom: 4px;";
+        
         const numberSpan = document.createElement('span');
         numberSpan.textContent = day;
         numberSpan.style.fontWeight = 'bold';
-        dayDiv.appendChild(numberSpan);
+        headerRow.appendChild(numberSpan);
 
-        if (dayRes.length > 0) {
-          const badge = document.createElement('span');
-          badge.textContent = `U: ${dayRes.map(r => r.unit_id).join(',')}`;
-          badge.style.cssText = "font-size: 0.7rem; background: #ef4444; color: white; padding: 2px 4px; border-radius: 3px; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
-          dayDiv.appendChild(badge);
-        } else if (isBlocked) {
-          const badge = document.createElement('span');
-          badge.textContent = "Bloqueado";
-          badge.style.cssText = "font-size: 0.7rem; background: #9ca3af; color: white; padding: 2px 4px; border-radius: 3px; margin-top: 4px;";
-          dayDiv.appendChild(badge);
+        if (isBlocked) {
+          const blockBadge = document.createElement('span');
+          blockBadge.textContent = 'Bloqueado';
+          blockBadge.style.cssText = 'font-size: 0.65rem; background: #9ca3af; color: white; padding: 1px 3px; border-radius: 3px;';
+          headerRow.appendChild(blockBadge);
+        }
+        dayDiv.appendChild(headerRow);
+
+        // Contenedor de Turnos (Día arriba, Noche abajo)
+        const shiftsContainer = document.createElement('div');
+        shiftsContainer.style.cssText = "display: flex; flex-direction: column; gap: 3px; font-size: 0.72rem;";
+
+        if (isBlocked) {
+          const blockedText = document.createElement('div');
+          blockedText.textContent = "Mantenimiento";
+          blockedText.style.cssText = "color: #4b5563; text-align: center; font-style: italic; padding: 10px 0;";
+          shiftsContainer.appendChild(blockedText);
+        } else {
+          // --- TURNO DÍA ---
+          const shiftDia = document.createElement('div');
+          shiftDia.style.cssText = `padding: 2px 4px; border-radius: 3px; text-align: left; background: ${resDia ? '#fee2e2' : '#dcfce7'}; color: ${resDia ? '#991b1b' : '#166534'}; font-weight: ${resDia ? 'bold' : 'normal'};`;
+          shiftDia.textContent = resDia ? `☀️ Día: U-${resDia.unit_id}` : `☀️ Día: Libre`;
+          shiftsContainer.appendChild(shiftDia);
+
+          // --- TURNO NOCHE ---
+          const shiftNoche = document.createElement('div');
+          shiftNoche.style.cssText = `padding: 2px 4px; border-radius: 3px; text-align: left; background: ${resNoche ? '#fee2e2' : '#dcfce7'}; color: ${resNoche ? '#991b1b' : '#166534'}; font-weight: ${resNoche ? 'bold' : 'normal'};`;
+          shiftNoche.textContent = resNoche ? `🌙 Noche: U-${resNoche.unit_id}` : `🌙 Noche: Libre`;
+          shiftsContainer.appendChild(shiftNoche);
         }
 
+        dayDiv.appendChild(shiftsContainer);
+
+        // Al hacer clic, selecciona la fecha para bloquear
         dayDiv.addEventListener('click', () => {
           const dateInput = document.getElementById('blockDate');
           if (dateInput) {
@@ -367,7 +394,6 @@
     window.addEventListener('DOMContentLoaded', () => {
       loadAdminCalendar();
 
-      // Observer auxiliar para modales
       const modalEl = document.getElementById('add-unit-modal');
       if (modalEl) {
         const observer = new MutationObserver(() => {
