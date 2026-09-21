@@ -57,7 +57,7 @@ router.get('/', (req, res) => {
     }
 });
 
-// POST /:id/verify-pin: Verificar el PIN de la unidad
+// POST /:id/verify-pin: Verificar el PIN de la unidad de forma estricta
 router.post('/:id/verify-pin', (req, res) => {
     try {
         const { id } = req.params;
@@ -72,13 +72,22 @@ router.post('/:id/verify-pin', (req, res) => {
             return res.status(404).json({ error: 'Unidad no encontrada.' });
         }
 
-        if (unit.pin && String(unit.pin).trim() !== String(pin || '').trim()) {
-            return res.status(400).json({ error: 'El PIN ingresado es incorrecto.' });
+        const storedPin = String(unit.pin || '').trim();
+        const providedPin = String(pin || '').trim();
+
+        // BLOQUEO ESTRICTO: Si no tiene PIN configurado o está vacío en la base de datos
+        if (!storedPin) {
+            return res.status(400).json({ ok: false, error: 'Esta unidad no tiene un PIN configurado en el sistema.' });
+        }
+
+        // Validar que coincida exactamente
+        if (storedPin !== providedPin) {
+            return res.status(400).json({ ok: false, error: 'El PIN ingresado es incorrecto.' });
         }
 
         res.json({ ok: true, success: true, unit });
     } catch (err) {
-        res.status(500).json({ error: 'Error al verificar el PIN.' });
+        res.status(500).json({ ok: false, error: 'Error al verificar el PIN.' });
     }
 });
 
