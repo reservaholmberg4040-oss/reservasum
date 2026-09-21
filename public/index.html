@@ -325,6 +325,20 @@
     input.value = '';
     container.scrollTop = container.scrollHeight;
 
+    // Recopilar el historial previo visible en la interfaz para mantener memoria en el backend
+    const messageElements = container.querySelectorAll('.holmia-msg');
+    const history = [];
+    messageElements.forEach(el => {
+      if (el.classList.contains('user')) {
+        history.push({ role: 'user', content: el.textContent });
+      } else if (el.classList.contains('bot') && !el.textContent.includes('está escribiendo...')) {
+        history.push({ role: 'assistant', content: el.textContent });
+      }
+    });
+
+    // Excluimos el mensaje actual que acabamos de agregar del array de historial previo
+    history.pop();
+
     // Mensaje temporal de "Escribiendo..."
     const typingDiv = document.createElement('div');
     typingDiv.className = 'holmia-msg bot';
@@ -336,7 +350,7 @@
       const response = await fetch('/api/chat/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text, history: history })
       });
 
       const data = await response.json();
