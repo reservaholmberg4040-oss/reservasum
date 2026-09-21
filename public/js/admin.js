@@ -480,9 +480,9 @@ async function loadUnits() {
       const tr = document.createElement('tr');
       const unitId = u.id || u.unidad;
       
-      // Corrección aplicada para unir correctamente piso y departamento
+      // Captura tanto 'depto' como 'dto' para asegurar que muestre el departamento sin importar el nombre del campo en la base
       const pisoVal = u.piso || '';
-      const deptoVal = u.depto || '';
+      const deptoVal = u.depto || u.dto || '';
       const pisoDtoStr = (pisoVal || deptoVal) ? `${pisoVal} ${deptoVal}`.trim() : '-';
       
       const isBaja = u.baja === true;
