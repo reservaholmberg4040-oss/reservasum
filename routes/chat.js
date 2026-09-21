@@ -4,7 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { OpenAI } = require('openai');
 
-const openai = new OpenAI();
+// Inicializar OpenAI asegurando que tome la key del entorno
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
@@ -54,6 +57,14 @@ router.post('/ask', async (req, res) => {
       return res.status(400).json({ error: 'El mensaje no puede estar vacío.' });
     }
 
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('[ERROR CHAT]: Falta configurar la variable de entorno OPENAI_API_KEY');
+      return.status(500).json({ 
+        success: false, 
+        error: 'El asistente no está configurado correctamente en el servidor (Falta API Key).' 
+      });
+    }
+
     const reservations = readJsonFile(reservationsFile, []);
     const blockedDays = readJsonFile(blockedDaysFile, []);
     const buildingConfig = readJsonFile(configFile, { 
@@ -100,7 +111,7 @@ ${reglamentoText}
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: messages,
-      temperature: 0.2, // Bajamos un poquito más la temperatura para que sea más literal y obediente
+      temperature: 0.2,
       max_tokens: 400
     });
 
@@ -108,8 +119,9 @@ ${reglamentoText}
     res.json({ success: true, reply });
 
   } catch (err) {
-    console.error('Error en el asistente de chat IA:', err);
+    console.error('Error detallado en el asistente de chat IA:', err);
     res.status(500).json({ 
+      success: false,
       error: 'Lo siento, en este momento el asistente virtual no está disponible. Intentá más tarde.' 
     });
   }
