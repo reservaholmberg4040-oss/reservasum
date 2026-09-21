@@ -9,6 +9,7 @@ const openai = new OpenAI();
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 const configFile = path.join(__dirname, '../data/config.json');
+const reglamentoFile = path.join(__dirname, '../data/reglamento.txt'); // <-- Archivo de reglamento
 
 function readJsonFile(filePath, defaultValue = []) {
   try {
@@ -20,20 +21,31 @@ function readJsonFile(filePath, defaultValue = []) {
   }
 }
 
+function readTextFile(filePath, defaultValue = '') {
+  try {
+    if (!fs.existsSync(filePath)) return defaultValue;
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    return defaultValue;
+  }
+}
+
 const SYSTEM_PROMPT = `
-Sos "HolmIA", el asistente virtual oficial del SUM del edificio Holmberg 4040.
-Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reglas, turnos y estado del SUM.
+Sos "HolmIA", el asistente virtual oficial del SUM y del edificio Holmberg 4040.
+Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reglas, turnos, penalidades y estado del SUM y la pileta, basándote estrictamente en el reglamento oficial del edificio.
 
 TIENES ACCESO A LOS SIGUIENTES DATOS EN TIEMPO REAL:
+- El reglamento completo del SUM y de la Pileta (horarios, invitados, sanciones, aranceles, prohibiciones).
 - Todas las reservas futuras registradas en el edificio (con sus respectivas unidades, fechas, turnos y nombres). 
 - Los días bloqueados por mantenimiento o eventos.
 - La configuración de límites (máximo de reservas por semana, por mes y días máximos de anticipación).
 
 INSTRUCCIONES CLAVE PARA LA CONVERSACIÓN:
-1. MEMORIA Y BÚSQUEDA DE UNIDAD: Si en los mensajes anteriores el usuario ya indicó su unidad (por ejemplo, "3D" o "unidad 13"), recuérdala. Debes buscar en la lista de reservas activas aquellas donde la Unidad coincida (ignorando mayúsculas/minúsculas, por ejemplo "3D" coincide con "3d"). Si encuentras reservas, infórmale las fechas, turnos y nombres exactos. Si no hay ninguna, indícalo amablemente. No vuelvas a pedir el número de unidad si ya te lo dieron.
-2. LÍMITES Y ANTICIPACIÓN: Utiliza los valores de configuración actual (máximo por semana, por mes y días de anticipación).
-3. SEGURIDAD DE PINs: NUNCA tienes acceso a los PINs de las unidades ni puedes revelarlos. Si preguntan por su PIN, indícales amablemente que deben solicitarlo a la administración.
-4. TEMA EXCLUSIVO: Responde únicamente sobre temas del edificio Holmberg 4040 y el SUM. Si te dan una respuesta corta como "sí" o un número de unidad suelto, interprétalo en el contexto de lo que venían charlando.
+1. REGLAMENTO Y NORMATIVA: Responde cualquier duda sobre horarios (turnos día/noche, pileta), invitados permitidos, prohibiciones (mascotas, música, prohibición de fumar, alcohol en solárium), limpieza obligatoria, aranceles o multas basándote en el texto del reglamento provisto.
+2. MEMORIA Y BÚSQUEDA DE UNIDAD: Si en los mensajes anteriores el usuario ya indicó su unidad (por ejemplo, "3D" o "unidad 13"), recuérdala y busca en las reservas activas las coincidencias para informarle sus turnos y nombres exactos. No vuelvas a pedir el número de unidad si ya te lo dieron.
+3. LÍMITES Y ANTICIPACIÓN: Utiliza los valores de configuración actual y del reglamento (máximo por semana, por mes y días de anticipación, como los 60 días o fechas especiales).
+4. SEGURIDAD DE PINs: NUNCA tienes acceso a los PINs de las unidades ni puedes revelarlos. Si preguntan por su PIN, indícales amablemente que deben solicitarlo a la administración.
+5. TEMA EXCLUSIVO: Responde únicamente sobre temas del edificio Holmberg 4040, el SUM y la pileta. Si te dan una respuesta corta como "sí" o un número de unidad suelto, interprétalo en el contexto de lo que venían charlando.
 `;
 
 router.post('/ask', async (req, res) => {
@@ -52,6 +64,7 @@ router.post('/ask', async (req, res) => {
       dias_anticipacion_min: 0 
     });
     
+    const reglamentoText = readTextFile(reglamentoFile, 'No hay reglamento cargado actualmente.');
     const today = new Date().toISOString().slice(0, 10);
 
     // Mapeo detallado y estructurado de todas las reservas futuras
@@ -66,8 +79,12 @@ INFORMACIÓN ACTUAL DEL EDIFICIO (Fecha de hoy: ${today}):
 - Configuración de límites: Máximo ${buildingConfig.max_reservas_semana} reserva(s) por semana, Máximo ${buildingConfig.max_reservas_mes} reserva(s) por mes.
 - Anticipación máxima permitida: ${buildingConfig.dias_anticipacion_max} días desde hoy.
 - Días bloqueados por mantenimiento: ${JSON.stringify(blockedDays)}
-- Próximas reservas registradas en todo el edificio (CRUCIAL PARA BUSCAR POR UNIDAD): 
+- Próximas reservas registradas en todo el edificio: 
 ${activeReservations.length > 0 ? activeReservations.join('\n') : 'Ninguna próxima registrada'}
+
+---
+REGLAMENTO OFICIAL DEL EDIFICIO (SUM Y PILETA):
+${reglamentoText}
 `;
 
     let messages = [
@@ -84,7 +101,7 @@ ${activeReservations.length > 0 ? activeReservations.join('\n') : 'Ninguna próx
       model: "gpt-4o-mini",
       messages: messages,
       temperature: 0.3,
-      max_tokens: 350
+      max_tokens: 500 // Subimos un poco los tokens por si la respuesta requiere citar artículos del reglamento
     });
 
     const reply = completion.choices[0].message.content;
