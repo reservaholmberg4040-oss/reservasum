@@ -137,11 +137,52 @@
 
 <!-- ================= START: ASISTENTE HOLMIA CHAT ================= -->
 <style>
-  /* Botón flotante */
-  #holmia-fab {
+  /* Contenedor principal flotante (Alinea el globo y el botón) */
+  .holmia-wrapper {
     position: fixed;
     bottom: 25px;
     right: 25px;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Globo de texto flotante */
+  .holmia-tooltip-bubble {
+    background: #ffffff;
+    padding: 8px 14px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e2e8f0;
+    animation: holmiaPulseBubble 2.5s infinite alternate ease-in-out;
+    cursor: pointer;
+  }
+
+  .holmia-tooltip-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0d6efd;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .holmia-tooltip-text {
+    font-size: 13px;
+    color: #1e293b;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  @keyframes holmiaPulseBubble {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-4px); }
+  }
+
+  /* Botón flotante (FAB) con efecto de pulso */
+  #holmia-fab {
     width: 60px;
     height: 60px;
     background-color: #0d6efd;
@@ -150,18 +191,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.4);
     cursor: pointer;
-    z-index: 1050;
-    transition: transform 0.2s ease;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    animation: holmiaPulseBtn 2s infinite;
   }
+  
   #holmia-fab:hover {
-    transform: scale(1.05);
+    transform: scale(1.08);
+    background-color: #0b5ed7;
   }
+
   #holmia-fab svg {
     width: 28px;
     height: 28px;
     fill: currentColor;
+  }
+
+  @keyframes holmiaPulseBtn {
+    0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.5); }
+    70% { box-shadow: 0 0 0 15px rgba(13, 110, 253, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
   }
 
   /* Ventana del Chat */
@@ -270,9 +320,18 @@
   }
 </style>
 
-<!-- Botón flotante (FAB) -->
-<div id="holmia-fab" title="Consultar con HolmIA" onclick="toggleHolmiaChat()">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+<!-- Contenedor flotante unificado (Globo + Botón) -->
+<div class="holmia-wrapper">
+  <!-- Globo dinámico interactivo -->
+  <div class="holmia-tooltip-bubble" onclick="toggleHolmiaChat()" title="Abrir chat con HolmIA">
+    <span class="holmia-tooltip-title">✨ Asistente IA</span>
+    <span class="holmia-tooltip-text">¡Preguntale a HolmIA!</span>
+  </div>
+
+  <!-- Botón flotante (FAB) -->
+  <div id="holmia-fab" title="Consultar con HolmIA" onclick="toggleHolmiaChat()">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+  </div>
 </div>
 
 <!-- Ventana de chat -->
