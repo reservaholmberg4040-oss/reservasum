@@ -134,5 +134,236 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script src="/js/app.js"></script>
+
+<!-- ================= START: ASISTENTE HOLMIA CHAT ================= -->
+<style>
+  /* Botón flotante */
+  #holmia-fab {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    cursor: pointer;
+    z-index: 1050;
+    transition: transform 0.2s ease;
+  }
+  #holmia-fab:hover {
+    transform: scale(1.05);
+  }
+  #holmia-fab svg {
+    width: 28px;
+    height: 28px;
+    fill: currentColor;
+  }
+
+  /* Ventana del Chat */
+  #holmia-chat-window {
+    position: fixed;
+    bottom: 95px;
+    right: 25px;
+    width: 350px;
+    max-width: calc(100vw - 40px);
+    height: 450px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    z-index: 1050;
+    overflow: hidden;
+    display: none; /* Oculto por defecto */
+    border: 1px solid rgba(0,0,0,0.1);
+  }
+
+  /* Cabecera del chat */
+  .holmia-header {
+    background: #0d6efd;
+    color: white;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+  }
+  .holmia-close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  /* Cuerpo de mensajes */
+  .holmia-messages {
+    flex: 1;
+    padding: 15px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.9rem;
+  }
+
+  .holmia-msg {
+    max-width: 80%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .holmia-msg.bot {
+    background: #e9ecef;
+    color: #212529;
+    align-self: flex-start;
+    border-bottom-left-radius: 2px;
+  }
+  .holmia-msg.user {
+    background: #0d6efd;
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+  }
+
+  /* Pie con input */
+  .holmia-input-area {
+    padding: 10px;
+    background: white;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    gap: 8px;
+  }
+  .holmia-input-area input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 20px;
+    outline: none;
+    font-size: 0.9rem;
+  }
+  .holmia-input-area input:focus {
+    border-color: #0d6efd;
+  }
+  .holmia-input-area button {
+    background: #0d6efd;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .holmia-input-area button:hover {
+    background: #0b5ed7;
+  }
+</style>
+
+<!-- Botón flotante (FAB) -->
+<div id="holmia-fab" title="Consultar con HolmIA" onclick="toggleHolmiaChat()">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+</div>
+
+<!-- Ventana de chat -->
+<div id="holmia-chat-window">
+  <div class="holmia-header">
+    <span>🤖 HolmIA - Asistente SUM</span>
+    <button class="holmia-close-btn" onclick="toggleHolmiaChat()">&times;</button>
+  </div>
+  <div class="holmia-messages" id="holmiaMessagesContainer">
+    <div class="holmia-msg bot">¡Hola! Soy HolmIA, el asistente virtual del edificio. ¿En qué puedo ayudarte con las reservas o reglas del SUM?</div>
+  </div>
+  <div class="holmia-input-area">
+    <input type="text" id="holmiaUserInput" placeholder="Escribí tu consulta..." onkeypress="handleHolmiaKeyPress(event)" />
+    <button onclick="sendHolmiaMessage()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.493-7.493Z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  function toggleHolmiaChat() {
+    const win = document.getElementById('holmia-chat-window');
+    if (win.style.display === 'flex') {
+      win.style.display = 'none';
+    } else {
+      win.style.display = 'flex';
+      document.getElementById('holmiaUserInput').focus();
+    }
+  }
+
+  function handleHolmiaKeyPress(e) {
+    if (e.key === 'Enter') {
+      sendHolmiaMessage();
+    }
+  }
+
+  async function sendHolmiaMessage() {
+    const input = document.getElementById('holmiaUserInput');
+    const container = document.getElementById('holmiaMessagesContainer');
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    // Agregar mensaje del usuario a la vista
+    const userDiv = document.createElement('div');
+    userDiv.className = 'holmia-msg user';
+    userDiv.textContent = text;
+    container.appendChild(userDiv);
+
+    input.value = '';
+    container.scrollTop = container.scrollHeight;
+
+    // Mensaje temporal de "Escribiendo..."
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'holmia-msg bot';
+    typingDiv.textContent = 'HolmIA está escribiendo...';
+    container.appendChild(typingDiv);
+    container.scrollTop = container.scrollHeight;
+
+    try {
+      const response = await fetch('/api/chat/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+      });
+
+      const data = await response.json();
+      container.removeChild(typingDiv);
+
+      const botDiv = document.createElement('div');
+      botDiv.className = 'holmia-msg bot';
+      
+      if (data.success && data.reply) {
+        botDiv.textContent = data.reply;
+      } else {
+        botDiv.textContent = data.error || 'Lo siento, ocurrió un error al procesar tu consulta.';
+      }
+      container.appendChild(botDiv);
+
+    } catch (err) {
+      container.removeChild(typingDiv);
+      const errDiv = document.createElement('div');
+      errDiv.className = 'holmia-msg bot';
+      errDiv.textContent = 'Error de conexión con el asistente.';
+      container.appendChild(errDiv);
+    }
+
+    container.scrollTop = container.scrollHeight;
+  }
+</script>
+<!-- ================= END: ASISTENTE HOLMIA CHAT ================= -->
+
 </body>
 </html>
