@@ -9,6 +9,7 @@ const db = require('./db');
 const unitsRouter = require('./routes/units');
 const reservationsRouter = require('./routes/reservations');
 const adminRouter = require('./routes/admin');
+const chatRouter = require('./routes/chat'); // <-- NUEVO: Importar rutas del chat IA
 const { requireAdmin } = require('./routes/admin');
 const { scheduleMonthlyReport } = require('./utils/mailer');
 
@@ -18,7 +19,6 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', 1);
 
 // --- 2. USAR HELMET PARA CABECERAS DE SEGURIDAD ---
-// Nota: configuramos contentSecurityPolicy en false o adaptado si cargás scripts externos (como fuentes de Google, Bootstrap, etc.)
 app.use(helmet({
   contentSecurityPolicy: false, 
 }));
@@ -94,6 +94,7 @@ app.post('/api/admin/config', requireAdmin, async (req, res) => {
 app.use('/api/reservations', reservationsRouter);
 app.use('/api/units', unitsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/chat', chatRouter); // <-- NUEVO: Registrar endpoint del chat IA
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -103,7 +104,7 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- 3. MANEJADOR GLOBAL DE ERRORES (Debe ir al final, después de todas las rutas) ---
+// --- 3. MANEJADOR GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
   console.error('[ERROR NO CAPTURADO]:', err.stack || err);
   
@@ -118,7 +119,6 @@ app.use((err, req, res, next) => {
       : (err.message || 'Error interno')
   });
 });
-// ----------------------------------------------------------------------------------
 
 app.listen(PORT, () => {
   console.log(`Servidor SUM Holmberg 4040 corriendo en http://localhost:${PORT}`);
