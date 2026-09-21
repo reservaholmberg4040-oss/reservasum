@@ -24,29 +24,23 @@ const SYSTEM_PROMPT = `
 Sos "HolmIA", el asistente virtual oficial del SUM del edificio Holmberg 4040.
 Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reglas, turnos y estado del SUM.
 
-TENÉS ACCESO A LOS SIGUIENTES DATOS EN TIEMPO REAL:
-- Todas las reservas futuras registradas en el edificio (con sus respectivas unidades y turnos).
+TIENES ACCESO A LOS SIGUIENTES DATOS EN TIEMPO REAL:
+- Todas las reservas futuras registradas en el edificio (con sus respectivas unidades y turnos). Formato de unidades en el sistema (ej: "3D", "13", etc.).
 - Los días bloqueados por mantenimiento o eventos.
-- La configuración de límites (máximo de reservas por semana, por mes y días máximos/mínimos de anticipación).
+- La configuración de límites (máximo de reservas por semana, por mes y días máximos de anticipación).
 
-INSTRUCCIONES Y REGLAS DE RESPUESTA:
-1. CONSULTAS PERSONALES DE UNIDAD (Ej: "¿Cuántas reservas me quedan?", "¿Qué reservas hice?"): 
-   - Si el vecino menciona su unidad (ej. "soy de la unidad 2B"), revisá las reservas registradas en el contexto para detallarle qué días y turnos reservó. 
-   - Si NO menciona su unidad, pedile amablemente que te indique su número de unidad para poder buscar la información.
-2. LÍMITES DE RESERVAS Y ANTICIPACIÓN: 
-   - Utilizá los valores de la configuración actual (máximo por semana, por mes y días de anticipación). 
-   - Si intentan reservar fuera de plazo o superan el límite, explicales claramente la regla vigente.
-3. DISPONIBILIDAD (Ej: "¿Qué días está libre el SUM la semana que viene?"): 
-   - Cruzá la fecha actual, los días bloqueados y las reservas ya existentes para informarle inteligentemente qué días u horarios se encuentran libres u ocupados.
-4. RECUPERACIÓN DE PIN: 
-   - Por motivos de seguridad absoluta, NUNCA tenés acceso a los PINs de las unidades ni podés revelarlos. Si preguntan cómo recuperarlo, explicales de forma cordial que deben solicitarlo directamente a la administración del edificio.
-5. TEMA EXCLUSIVO: 
-   - Si te preguntan sobre temas ajenos al edificio o al SUM, reorienta la conversación educadamente diciendo que solo podés ayudar con gestiones del edificio Holmberg 4040.
+INSTRUCCIONES CLAVE PARA LA CONVERSACIÓN:
+1. MEMORIA DE UNIDAD: Si en los mensajes anteriores el usuario ya indicó su unidad (por ejemplo, "3D" o "unidad 13"), recuérdala y úsala para buscar sus reservas en la lista de reservas activas. No vuelvas a pedir el número de unidad si ya te lo dieron en la conversación.
+2. CONSULTAS DE RESERVAS: Si te piden ver sus reservas y ya sabes la unidad, busca en las reservas activas y detalla las fechas y turnos correspondientes. Si no hay ninguna, indícalo amablemente.
+3. LÍMITES Y ANTICIPACIÓN: Utiliza los valores de configuración actual (máximo por semana, por mes y días de anticipación).
+4. SEGURIDAD DE PINs: NUNCA tienes acceso a los PINs de las unidades ni puedes revelarlos. Si preguntan por su PIN, indícales amablemente que deben solicitarlo a la administración.
+5. TEMA EXCLUSIVO: Responde únicamente sobre temas del edificio Holmberg 4040 y el SUM. Si te dan una respuesta corta como "sí" o un número de unidad suelto, interprétalo en el contexto de lo que venían charlando.
 `;
 
 router.post('/ask', async (req, res) => {
   try {
-    const { message } = req.body;
+    // Ahora recibimos también el historial de mensajes si el frontend lo envía, o manejamos el mensaje actual
+    const { message, history } = req.body; 
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'El mensaje no puede estar vacío.' });
     }
@@ -71,15 +65,24 @@ INFORMACIÓN ACTUAL DEL EDIFICIO (Fecha de hoy: ${today}):
 - Configuración de límites: Máximo ${buildingConfig.max_reservas_semana} reserva(s) por semana, Máximo ${buildingConfig.max_reservas_mes} reserva(s) por mes.
 - Anticipación máxima permitida: ${buildingConfig.dias_anticipacion_max} días desde hoy.
 - Días bloqueados por mantenimiento: ${JSON.stringify(blockedDays)}
-- Próximas reservas registradas en todo el edificio: ${activeReservations.length > 0 ? activeReservations.join(' | ') : 'Ninguna próxima registrada'}
+- Próximas reservas registradas en todo el edificio (CRUCIAL PARA BUSCAR POR UNIDAD): ${activeReservations.length > 0 ? activeReservations.join(' | ') : 'Ninguna próxima registrada'}
 `;
+
+    // Armamos el array de mensajes para OpenAI incluyendo el historial previo si existe
+    let messages = [
+      { role: "system", content: SYSTEM_PROMPT + "\n\n" + contextData }
+    ];
+
+    if (Array.isArray(history) && history.length > 0) {
+      // history debe venir como un array de { role: 'user'|'assistant', content: '...' }
+      messages.push(...history);
+    }
+
+    messages.push({ role: "user", content: message.trim() });
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT + "\n\n" + contextData },
-        { role: "user", content: message.trim() }
-      ],
+      messages: messages,
       temperature: 0.3,
       max_tokens: 350
     });
