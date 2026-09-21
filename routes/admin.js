@@ -83,7 +83,6 @@ router.get('/audit-logs', requireAdmin, (req, res) => {
     let { startDate, endDate } = req.query;
     let logs = db.auditLogs.all();
 
-    // Validar formato estricto YYYY-MM-DD para seguridad informática
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (startDate && !dateRegex.test(startDate)) startDate = null;
     if (endDate && !dateRegex.test(endDate)) endDate = null;
@@ -107,7 +106,6 @@ router.get('/audit-logs/download', requireAdmin, (req, res) => {
     let { startDate, endDate } = req.query;
     let logs = db.auditLogs.all();
 
-    // Validar formato estricto YYYY-MM-DD para seguridad informática
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (startDate && !dateRegex.test(startDate)) startDate = null;
     if (endDate && !dateRegex.test(endDate)) endDate = null;
@@ -332,6 +330,7 @@ router.post('/units/add', requireAdmin, (req, res) => {
       unidad: uVal,
       piso: String(piso || ''),
       depto: String(depto || ''),
+      dto: String(depto || ''),
       propietario: String(propietario || ''),
       email: String(email || '').trim(),
       pin: pin && /^\d{4}$/.test(String(pin)) ? String(pin) : Math.floor(1000 + Math.random() * 9000).toString(),
@@ -351,6 +350,7 @@ router.post('/units/add', requireAdmin, (req, res) => {
   }
 });
 
+// Importación robusta para detectar cualquier nombre de columna en el Excel (Depto, Dto, Departamento, etc.)
 router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo Excel.' });
@@ -360,15 +360,26 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
     const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
     const importedUnits = rows.map((row, index) => {
-      const uVal = String(row['Unidad'] || row['unidad'] || `00${index + 1}`).padStart(4, '0');
+      const cleanRow = {};
+      Object.keys(row).forEach(k => {
+        cleanRow[k.trim().toLowerCase()] = row[k];
+      });
+
+      const rawUnidad = cleanRow['unidad'] || cleanRow['id'] || `00${index + 1}`;
+      const uVal = String(rawUnidad).padStart(4, '0');
+      
+      const pisoVal = String(cleanRow['piso'] || cleanRow['piso/dto'] || cleanRow['piso/depto'] || '');
+      const deptoVal = String(cleanRow['depto'] || cleanRow['dto'] || cleanRow['departamento'] || '');
+
       return {
         id: uVal,
         unidad: uVal,
-        piso: String(row['Piso'] || row['piso'] || 'PB'),
-        depto: String(row['Depto'] || row['depto'] || row['DTO'] || 'A'),
-        propietario: String(row['Propietario'] || row['propietario'] || 'SIN NOMBRE'),
-        email: String(row['Email'] || row['email'] || '').trim(),
-        pin: String(row['PIN'] || row['pin'] || Math.floor(1000 + Math.random() * 9000)),
+        piso: pisoVal,
+        depto: deptoVal,
+        dto: deptoVal,
+        propietario: String(cleanRow['propietario'] || cleanRow['nombre'] || 'SIN NOMBRE'),
+        email: String(cleanRow['email'] || cleanRow['correo'] || '').trim(),
+        pin: String(cleanRow['pin'] || Math.floor(1000 + Math.random() * 9000)),
         baja: false
       };
     });
@@ -388,6 +399,7 @@ router.post('/units/import-excel', requireAdmin, upload.single('file'), (req, re
 
     res.json({ success: true, message: `Se importaron ${importedUnits.length} unidades correctamente.` });
   } catch (err) {
+    console.error('Error al procesar la planilla Excel:', err);
     res.status(500).json({ error: 'Error al procesar la planilla Excel.' });
   }
 });
