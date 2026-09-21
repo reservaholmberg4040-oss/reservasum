@@ -183,8 +183,13 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
+    // BLOQUEO ESTRICTO: Si no tiene PIN configurado o está vacío, no se permite avanzar
+    if (!storedPin) {
+      return res.status(400).json({ error: 'Esta unidad no tiene un PIN configurado en el sistema.' });
+    }
+
     if (!providedPin || !/^\d+$/.test(providedPin) || storedPin !== providedPin) {
-      return res.status(400).json({ error: 'El PIN debe ser numérico y es incorrecto o está vacío.' });
+      return res.status(400).json({ error: 'El PIN ingresado es incorrecto o está vacío.' });
     }
 
     let reservations = readReservations();
@@ -283,7 +288,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     reservations.push(newReservation);
     writeReservations(reservations);
 
-    // --- REGISTRAR EN AUDITORÍA ---
     db.auditLogs.add('RESERVA_CREADA', `Unidad ${unitIdentifier} reservó el día ${date} (${turno}) a nombre de ${cleanNombre} ${cleanApellido}`, `Unidad ${unitIdentifier}`);
 
     res.json({ ok: true, success: true, reservation: newReservation });
@@ -342,8 +346,14 @@ router.put('/:id', pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Unidad asociada no encontrada.' });
     }
 
+    const storedPin = String(targetUnit.pin || '').trim();
     const cleanPin = String(unit_pin || '').trim();
-    if (targetUnit.pin && (!/^\d+$/.test(cleanPin) || String(targetUnit.pin).trim() !== cleanPin)) {
+
+    if (!storedPin) {
+      return res.status(400).json({ error: 'Esta unidad no tiene un PIN configurado en el sistema.' });
+    }
+
+    if (!cleanPin || !/^\d+$/.test(cleanPin) || storedPin !== cleanPin) {
       return res.status(400).json({ error: 'El PIN ingresado es incorrecto o no es numérico.' });
     }
 
@@ -376,8 +386,6 @@ router.put('/:id', pinLimiter, async (req, res) => {
     };
 
     writeReservations(reservations);
-
-    // --- REGISTRAR EN AUDITORÍA ---
     db.auditLogs.add('RESERVA_MODIFICADA', `Unidad ${currentRes.unit_id} modificó la reserva (Nueva fecha: ${reservations[index].date}, Turno: ${reservations[index].turno})`, `Unidad ${currentRes.unit_id}`);
 
     res.json({ ok: true, success: true, reservation: reservations[index] });
@@ -404,15 +412,16 @@ router.delete('/:id', pinLimiter, (req, res) => {
       const cleanPin = String(unit_pin).trim();
       const units = db.units.all();
       const targetUnit = units.find(u => String(u.unidad || u.id) === String(reservation.unit_id));
-      if (targetUnit && targetUnit.pin && (!/^\d+$/.test(cleanPin) || String(targetUnit.pin).trim() !== cleanPin)) {
-        return res.status(400).json({ error: 'PIN incorrecto o formato inválido para cancelar la reserva.' });
+      
+      const storedPin = targetUnit ? String(targetUnit.pin || '').trim() : '';
+      if (!storedPin || storedPin !== cleanPin) {
+        return res.status(400).json({ error: 'PIN incorrecto o la unidad no tiene PIN configurado.' });
       }
     }
 
     const filtered = reservations.filter(r => String(r.id) !== String(id));
     writeReservations(filtered);
 
-    // --- REGISTRAR EN AUDITORÍA ---
     db.auditLogs.add('RESERVA_CANCELADA', `Se canceló la reserva de la Unidad ${reservation.unit_id} para el día ${reservation.date} (${reservation.turno})`, `Unidad ${reservation.unit_id}`);
 
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
