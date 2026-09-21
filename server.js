@@ -9,7 +9,7 @@ const db = require('./db');
 const unitsRouter = require('./routes/units');
 const reservationsRouter = require('./routes/reservations');
 const adminRouter = require('./routes/admin');
-const chatRouter = require('./routes/chat'); // <-- NUEVO: Importar rutas del chat IA
+const chatRouter = require('./routes/chat');
 const { requireAdmin } = require('./routes/admin');
 const { scheduleMonthlyReport } = require('./utils/mailer');
 
