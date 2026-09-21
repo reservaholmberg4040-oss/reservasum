@@ -59,7 +59,7 @@ router.post('/ask', async (req, res) => {
 
     if (!process.env.OPENAI_API_KEY) {
       console.error('[ERROR CHAT]: Falta configurar la variable de entorno OPENAI_API_KEY');
-      return.status(500).json({ 
+      return res.status(500).json({ 
         success: false, 
         error: 'El asistente no está configurado correctamente en el servidor (Falta API Key).' 
       });
