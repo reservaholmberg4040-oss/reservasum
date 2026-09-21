@@ -102,9 +102,8 @@ function initAdminPanel() {
   loadUnits();
   loadReportLog();
   loadBlockedDays();
-  loadConfig(); // Cargar la configuración general al iniciar el panel
+  loadConfig();
 
-  // Manejador para el formulario de Configuración General
   const configForm = document.getElementById('configForm');
   if (configForm) {
     configForm.addEventListener('submit', async (e) => {
@@ -137,7 +136,6 @@ function initAdminPanel() {
     });
   }
 
-  // Bloqueo de días con validación y notificaciones elegantes
   const blockDayForm = document.getElementById('blockDayForm');
   if (blockDayForm) {
     blockDayForm.addEventListener('submit', async (e) => {
@@ -360,7 +358,6 @@ function initAdminPanel() {
   }
 }
 
-// Función auxiliar para cargar los datos de configuración en los inputs del panel
 async function loadConfig() {
   try {
     const res = await fetch('/api/admin/config');
@@ -482,7 +479,12 @@ async function loadUnits() {
     units.forEach(u => {
       const tr = document.createElement('tr');
       const unitId = u.id || u.unidad;
-      const pisoDtoStr = u.piso && u.depto ? `${u.piso} ${u.depto}` : (u.piso || u.depto || '-');
+      
+      // Corrección aplicada para unir correctamente piso y departamento
+      const pisoVal = u.piso || '';
+      const deptoVal = u.depto || '';
+      const pisoDtoStr = (pisoVal || deptoVal) ? `${pisoVal} ${deptoVal}`.trim() : '-';
+      
       const isBaja = u.baja === true;
 
       tr.innerHTML = `
