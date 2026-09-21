@@ -183,7 +183,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
     const storedPin = String(targetUnit.pin || '').trim();
     const providedPin = String(unit_pin || '').trim();
 
-    // BLOQUEO ESTRICTO: Si no tiene PIN configurado o está vacío, no se permite avanzar
     if (!storedPin) {
       return res.status(400).json({ error: 'Esta unidad no tiene un PIN configurado en el sistema.' });
     }
@@ -269,12 +268,14 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
-    const deptoVal = targetUnit.depto || targetUnit.dto || '';
+    // Extracción segura del depto para evitar undefined
+    const deptoVal = targetUnit.depto || targetUnit.dto || targetUnit.departamento || '';
+    const pisoVal = targetUnit.piso || '';
 
     const newReservation = {
       id: Date.now().toString(),
       unit_id: unitIdentifier,
-      piso: String(targetUnit.piso || ''),
+      piso: String(pisoVal),
       depto: String(deptoVal),
       dto: String(deptoVal),
       propietario: String(targetUnit.propietario || ''),
@@ -299,7 +300,7 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
             date,
             turno,
             unidad: unitIdentifier,
-            piso: targetUnit.piso,
+            piso: pisoVal,
             dto: deptoVal,
             propietario: targetUnit.propietario
           });
