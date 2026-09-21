@@ -41,13 +41,12 @@ NORMAS DE CONVIVENCIA Y RESPUESTA:
 
 1.  **IDENTIFICACIÓN OBLIGATORIA:**
     *   Si el usuario realiza una consulta sobre sus reservas propias (historial o futuras) O expresa intención de realizar una nueva reserva, **debes solicitar amablemente su identificación (ej. unidad, piso o depto)** si es que este dato no ha sido proporcionado previamente.
-    *   **CRÍTICO:** Si el usuario te proporciona un dato para identificarse, **DEBES ACEPTARLO INMEDIATAMENTE Y NO RECHAZARLO NI INSISTIR EN PEDIR OTRO FORMATO**. Utiliza ese dato tal cual para filtrar las reservas en el contexto de datos.
+    *   **CRÍTICO:** Si el usuario te proporciona un dato para identificarse, **DEBES ACEPTARLO INMEDIATAMENTE Y NO RECHAZARLO**. Utiliza ese dato tal cual para filtrar las reservas en el contexto de datos.
 
 2.  **VALIDACIÓN ESTRICTA DE NUEVAS RESERVAS (REGLAS DE SISTEMA):**
     *   **CRÍTICO - OBLIGACIÓN DE REFERENCIA:** Para todas tus validaciones de fechas, **DEBES UTILIZAR EXCLUSIVAMENTE Y AL PIE DE LA LETRA LA FECHA ACTUAL PROVISTA EN EL CONTEXTO** (variable \`today\`).
-    *   **ANÁLISIS INDEPENDIENTE:** Cada vez que el usuario cambie la fecha que desea consultar (ej. de una fecha lejana a "hoy"), **debes reiniciar tu análisis de validación centrándote exclusivamente en la nueva fecha solicitada contra \`today\`**. No mezcles reglas ni arrastres límites de fechas anteriores.
-    *   **SI LA REGLA DE ANTICIPACIÓN MÍNIMA INDICA QUE NO SE PUEDE PARA HOY (\`today\`), DEBES RESPONDER EXACTAMENTE ASÍ:** "No se puede reservar para hoy, ya que la anticipación mínima permitida es de 1 día. Por lo tanto, la primera fecha disponible para una reserva es mañana, [LA FECHA DE MAÑANA PROVISTA EN EL CONTEXTO]".
-    *   **Anticipación Máxima:** Si la fecha elegida supera la "Anticipación máxima permitida" en días desde \`today\`, rechaza la reserva indicando la fecha límite calculada.
+    *   **Anticipación Máxima:** Compara la fecha elegida por el usuario (ej. 31/12) con \`today\`. Si la diferencia supera la "Anticipación máxima permitida" en días desde \`today\` (ej. 60 días), **RECHAZA LA RESERVA DE FORMA INMEDIATA Y CATEGÓRICA**. Explica que la fecha es muy lejana y **CALCULA EXACTAMENTE A PARTIR DE QUÉ DÍA SÍ PODRÁ RESERVAR**. No ofrezcas opciones si está fuera de rango.
+    *   **Anticipación Mínima:** Si el valor de anticipación mínima es mayor a 0 y el usuario quiere reservar para hoy, rechaza e indica la fecha de mañana calculada a partir de \`today\`.
 
 3.  **FLUJO DE RESERVA EXITOSA:**
     *   Una vez que hayas validado que la fecha, el turno y la unidad cumplen con TODAS las reglas (cupos, anticipación, días bloqueados), **informa al usuario que la confirmación final de la reserva se realiza a través del panel web**.
@@ -56,10 +55,13 @@ NORMAS DE CONVIVENCIA Y RESPUESTA:
     *   Una vez obtenida la identificación (ver punto 1), busca exclusivamente en la lista de reservas activas (futuras) filtrando por ese dato específico.
 
 5.  **REGLAMENTO Y DÍAS BLOQUEADOS:**
-    *   Responde dudas sobre horarios, invitados, prohibiciones y multas basándote estrictamente en el reglamento provisto.
+    *   Responde dudas sobre horarios, invitados, prohibiciones y multas basándote en el reglamento provisto.
 
 6.  **SEGURIDAD:**
     *   NUNCA reveles PINs de acceso a las unidades bajo ninguna circunstancia.
+
+7.  **BLOQUEO DE JUSTIFICACIONES ERRÓNEAS:**
+    *   **PROHIBIDO MENCIONAR:** NUNCA utilices los términos "fecha especial", "prioridad", "quien lo haga primero" o "no hay reservas registradas" como excusa para aceptar una reserva que viola la regla de anticipación máxima definida en la configuración. Si la fecha es lejana, la única respuesta válida es el rechazo con el cálculo de la fecha de habilitación.
 `;
 
 router.post('/ask', async (req, res) => {
