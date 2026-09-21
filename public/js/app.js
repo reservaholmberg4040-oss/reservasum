@@ -35,7 +35,7 @@ function unitLabel(u) {
 let currentYear = new Date().getFullYear();
 let units = [];
 let reservationsByDate = {}; 
-let blockedDaysMap = {}; // Mapeo de días bloqueados por fecha
+let blockedDaysMap = {}; 
 let selectedDate = null;
 let currentPinUnit = null; 
 let isSubmittingReservation = false;
@@ -231,7 +231,7 @@ async function openDayModal(iso) {
   const sub = document.getElementById('dayModalSub');
   if (title) title.textContent = fmtFecha(iso);
   
-  await loadBlockedDays(); // Actualizar por si el admin bloqueó algo recién
+  await loadBlockedDays(); 
   const blockReason = blockedDaysMap[iso];
   const isPast = iso < todayISO();
 
@@ -470,7 +470,7 @@ async function doCancel(id) {
   });
 }
 
-// ---------- Mis reservas ----------
+// ---------- Mis reservas / Validación de PIN ----------
 function setupPinForm() {
   const pinForm = document.getElementById('pinForm');
   const misLockBtn = document.getElementById('misLockBtn');
@@ -488,12 +488,14 @@ function setupPinForm() {
         return; 
       }
 
+      // Verificación estricta en el servidor
       const res = await fetch(`/api/units/${unitId}/verify-pin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin })
       });
       const data = await res.json();
+      
       if (!res.ok || !data.ok) {
-        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto.'}</div>`;
+        if (alertBox) alertBox.innerHTML = `<div class="alert alert-error">${data.error || 'PIN incorrecto o unidad sin PIN configurado.'}</div>`;
         return;
       }
 
