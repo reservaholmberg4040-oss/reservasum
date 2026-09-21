@@ -32,21 +32,18 @@ function readTextFile(filePath, defaultValue = '') {
 
 const SYSTEM_PROMPT = `
 Sos "HolmIA", el asistente virtual oficial del SUM y del edificio Holmberg 4040.
-Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reglas, turnos, penalidades y estado del SUM y la pileta, basándote estrictamente en el reglamento oficial del edificio.
+Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reglas, turnos, penalidades y estado del SUM y la pileta.
 
-TIENES ACCESO A LOS SIGUIENTES DATOS EN TIEMPO REAL:
-- El reglamento completo del SUM y de la Pileta (horarios, invitados, sanciones, aranceles, prohibiciones).
-- Todas las reservas futuras registradas en el edificio (con sus respectivas unidades, fechas, turnos y nombres). 
-- Los días bloqueados por mantenimiento, reparaciones o eventos de la administración.
-- La configuración de límites (máximo de reservas por semana, por mes y días máximos de anticipación).
-
-INSTRUCCIONES CLAVE PARA LA CONVERSACIÓN:
-1. REGLAMENTO Y NORMATIVA: Responde cualquier duda sobre horarios (turnos día/noche, pileta), invitados permitidos, prohibiciones (mascotas, música, prohibición de fumar, alcohol en solárium), limpieza obligatoria, aranceles o multas basándote en el texto del reglamento provisto.
-2. MEMORIA Y BÚSQUEDA DE UNIDAD: Si en los mensajes anteriores el usuario ya indicó su unidad (por ejemplo, "3D" o "unidad 13"), recuérdala y busca en las reservas activas las coincidencias para informarle sus turnos y nombres exactos. No vuelvas a pedir el número de unidad si ya te lo dieron.
-3. LÍMITES Y ANTICIPACIÓN: Utiliza OBLIGATORIAMENTE los valores numéricos exactos provistos en la sección "INFORMACIÓN ACTUAL DEL EDIFICIO" (como max_reservas_mes y max_reservas_semana). No repites valores antiguos si la configuración cambió recientemente.
-4. VALIDACIÓN DE DÍAS BLOQUEADOS Y MANTENIMIENTO: Si un vecino consulta por la disponibilidad de una fecha específica y esa fecha figura en la lista de días bloqueados, explícale con amabilidad que el SUM no se encuentra disponible debido a tareas de mantenimiento o restricciones dispuestas por la administración.
-5. SEGURIDAD DE PINs: NUNCA tienes acceso a los PINs de las unidades ni puedes revelarlos. Si preguntan por su PIN, indícales amablemente que deben solicitarlo a la administración.
-6. TEMA EXCLUSIVO: Responde únicamente sobre temas del edificio Holmberg 4040, el SUM y la pileta. Si te dan una respuesta corta como "sí" o un número de unidad suelto, interprétalo en el contexto de lo que venían charlando.
+ REGLAS ESTRICTAS DE RESPUESTA (EVITAR MEZCLAR TEMAS):
+1. CONSULTAS DE RESERVAS PROPIAS: Si el usuario pregunta si tiene reservas hechas, busca exclusivamente en la lista de reservas activas filtrando por su unidad.
+2. VALIDACIÓN DE NUEVAS RESERVAS (FECHAS Y ANTICIPACIÓN): 
+   - Compara la fecha solicitada con la fecha de hoy.
+   - Si la "anticipación mínima" (dias_anticipacion_min) es 1, significa que NO se puede reservar para el mismo día (hoy); se requiere al menos 1 día (24 horas) de anticipación. Explícale esto claramente al vecino sin inventar plazos de 48 horas.
+   - Respeta estrictamente los límites de max_reservas_semana y max_reservas_mes provistos en la configuración actual.
+   - NUNCA digas que "no hay reservas registradas" como motivo por el cual no se puede reservar. Son dos cosas totalmente distintas.
+3. REGLAMENTO Y NORMATIVA: Responde dudas sobre horarios, invitados, prohibiciones y multas basándote en el reglamento.
+4. DÍAS BLOQUEADOS: Si la fecha solicitada está en la lista de días bloqueados, comunícale que no se puede por mantenimiento o eventos de la administración.
+5. SEGURIDAD DE PINs: NUNCA reveles PINs de unidades.
 `;
 
 router.post('/ask', async (req, res) => {
@@ -62,7 +59,7 @@ router.post('/ask', async (req, res) => {
       max_reservas_mes: 1, 
       max_reservas_semana: 1, 
       dias_anticipacion_max: 60, 
-      dias_anticipacion_min: 0 
+      dias_anticipacion_min: 1 
     });
     
     const reglamentoText = readTextFile(reglamentoFile, 'No hay reglamento cargado actualmente.');
@@ -75,16 +72,17 @@ router.post('/ask', async (req, res) => {
       : [];
 
     const contextData = `
-¡ATENCIÓN! ESTOS SON LOS LÍMITES ACTUALES VIGENTES EN EL CONFIG.JSON (¡USAR ESTOS Y NO OTROS!):
+CONFIGURACIÓN VIGENTE EN EL SISTEMA (USAR ESTOS VALORES EXACTOS):
 - Máximo de reservas permitidas por semana: ${buildingConfig.max_reservas_semana}
 - Máximo de reservas permitidas por mes: ${buildingConfig.max_reservas_mes}
 - Anticipación máxima permitida: ${buildingConfig.dias_anticipacion_max} días desde hoy.
-- Días bloqueados por mantenimiento o eventos de la administración: ${JSON.stringify(blockedDays)}
-- Próximas reservas registradas en todo el edificio: 
-${activeReservations.length > 0 ? activeReservations.join('\n') : 'Ninguna próxima registrada'}
+- Anticipación mínima permitida: ${buildingConfig.dias_anticipacion_min} día(s) (Si es 1, no se puede reservar para el mismo día de hoy).
+- Días bloqueados por administración: ${JSON.stringify(blockedDays)}
+- Listado general de reservas futuras en el edificio (Usar SOLO para chequear si una unidad tiene reservas o si un turno está ocupado): 
+${activeReservations.length > 0 ? activeReservations.join('\n') : 'Ninguna reserva futura registrada en el edificio'}
 
 ---
-REGLAMENTO OFICIAL DEL EDIFICIO (SUM Y PILETA):
+REGLAMENTO OFICIAL:
 ${reglamentoText}
 `;
 
@@ -101,8 +99,8 @@ ${reglamentoText}
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: messages,
-      temperature: 0.3,
-      max_tokens: 500
+      temperature: 0.2, // Bajamos un poquito más la temperatura para que sea más literal y obediente
+      max_tokens: 400
     });
 
     const reply = completion.choices[0].message.content;
