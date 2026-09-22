@@ -87,6 +87,41 @@ async function sendReservationConfirmation(recipientEmail, reservationDetails) {
   });
 }
 
+/**
+ * Envía un aviso automático a los usuarios en lista de espera cuando se libera un turno
+ */
+async function sendWaitingListAlert(recipientEmail, alertDetails) {
+  const transport = getTransport();
+  if (!transport || !recipientEmail) return;
+
+  const { date, turno, propietario } = alertDetails;
+  const turnoLabel = String(turno).toLowerCase().includes('dia') || String(turno).toLowerCase().includes('día') ? 'Día' : 'Noche';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+      <h2 style="color: #16a34a; margin-top: 0;">🔔 ¡Turno Disponible en el SUM!</h2>
+      <p>Hola <strong>${propietario || 'Propietario'}</strong>,</p>
+      <p>Te informamos que se acaba de liberar un turno que estabas esperando en la <strong>Lista de Espera</strong>:</p>
+      
+      <div style="background: #f0fdf4; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #bbf7d0;">
+        <p style="margin: 6px 0;">📅 <strong>Fecha:</strong> ${date}</p>
+        <p style="margin: 6px 0;">⏰ <strong>Turno:</strong> ${turnoLabel}</p>
+      </div>
+      
+      <p>Como el turno ya se encuentra libre, podés ingresar a la plataforma para reservarlo ahora mismo por orden de llegada. ¡No te duermas!</p>
+      <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+      <p style="font-size: 12px; color: #9ca3af; text-align: center;">Administración — SUM Holmberg 4040</p>
+    </div>
+  `;
+
+  await transport.sendMail({
+    from: `"SUM Holmberg 4040" <${process.env.SMTP_USER}>`,
+    to: recipientEmail,
+    subject: `🔔 ¡Turno disponible en el SUM! - ${date} (${turnoLabel})`,
+    html
+  });
+}
+
 function previousMonthPeriod() {
   const d = new Date();
   d.setDate(1);
@@ -111,4 +146,10 @@ function scheduleMonthlyReport() {
   console.log(`[mailer] Envío automático programado: día ${day} de cada mes, 08:00.`);
 }
 
-module.exports = { sendMonthlyReport, scheduleMonthlyReport, previousMonthPeriod, sendReservationConfirmation };
+module.exports = { 
+  sendMonthlyReport, 
+  scheduleMonthlyReport, 
+  previousMonthPeriod, 
+  sendReservationConfirmation, 
+  sendWaitingListAlert 
+};
