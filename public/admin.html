@@ -163,6 +163,29 @@
       </form>
     </section>
 
+    <!-- NUEVA SECCIÓN: LISTA DE ESPERA PARA VALIDAR -->
+    <section class="admin-section">
+      <h2>Solicitudes en Lista de Espera</h2>
+      <p style="font-size: 0.9rem; color: #6b7280;">Unidades anotadas a la espera de una cancelación para los turnos ocupados.</p>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Fecha solicitada</th>
+              <th>Turno</th>
+              <th>Unidad</th>
+              <th>Solicitante</th>
+              <th>Fecha de registro</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="waiting-list-tbody">
+            <tr><td colspan="6" class="text-center text-muted" style="padding: 15px;">Cargando lista de espera...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- CALENDARIO VISUAL -->
     <section class="admin-section">
       <div class="section-header-actions">
@@ -367,6 +390,52 @@
   <script>
     let currentCalDate = new Date();
 
+    // --- NUEVO: Función para cargar y mostrar la lista de espera en el panel ---
+    async function loadWaitingList() {
+      const tbody = document.getElementById('waiting-list-tbody');
+      if (!tbody) return;
+
+      try {
+        const res = await fetch('/api/waiting-list');
+        const list = await res.json();
+
+        if (!Array.isArray(list) || list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 15px;">No hay solicitudes en lista de espera actualmente.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(item => `
+          <tr>
+            <td><strong>${item.date}</strong></td>
+            <td>${item.turno}</td>
+            <td>Unidad ${item.unit_id}</td>
+            <td>${item.nombre} ${item.apellido} (${item.propietario})</td>
+            <td style="font-size: 0.82rem; color: #6b7280;">${new Date(item.createdAt).toLocaleString('es-AR')}</td>
+            <td class="text-center">
+              <button onclick="removeWaitingItem('${item.id}')" class="btn btn-xs" style="background: #ef4444; color: white; border: none; padding: 4px 8px; font-size: 0.8rem;">Validar / Quitar</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger" style="padding: 15px;">Error al cargar la lista de espera.</td></tr>';
+      }
+    }
+
+    window.removeWaitingItem = async function(id) {
+      if (!confirm('¿Deseas validar o eliminar esta solicitud de la lista de espera?')) return;
+      try {
+        const res = await fetch(`/api/waiting-list/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          if (typeof showToast === 'function') showToast('Solicitud procesada con éxito.', 'success');
+          loadWaitingList();
+        } else {
+          if (typeof showToast === 'function') showToast('Error al procesar la solicitud.', 'danger');
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') showToast('Error de conexión.', 'danger');
+      }
+    };
+
     async function loadAdminCalendar() {
       const year = currentCalDate.getFullYear();
       const month = currentCalDate.getMonth() + 1;
@@ -549,6 +618,7 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       loadAdminCalendar();
+      loadWaitingList(); // <-- Carga automática de la lista de espera al iniciar
 
       const modalEl = document.getElementById('add-unit-modal');
       if (modalEl) {
