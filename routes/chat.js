@@ -13,6 +13,7 @@ const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 const configFile = path.join(__dirname, '../data/config.json');
 const reglamentoFile = path.join(__dirname, '../data/reglamento.txt');
+const waitingFile = path.join(__dirname, '../data/waiting-list.json');
 
 function readJsonFile(filePath, defaultValue = []) {
   try {
@@ -40,28 +41,28 @@ Tu objetivo es ayudar a los vecinos de forma amable, clara y concisa con las reg
 NORMAS DE CONVIVENCIA Y RESPUESTA:
 
 1.  **IDENTIFICACIÓN OBLIGATORIA:**
-    *   Si el usuario realiza una consulta sobre sus reservas propias (historial o futuras) O expresa intención de realizar una nueva reserva, **debes solicitar amablemente su identificación (número de unidad o piso y departamento, ej. "1° A") antes de procesar la información**, si es que este dato no ha sido proporcionado previamente.
+    *   Si el usuario realiza una consulta sobre sus reservas propias (historial o futuras) O expresa intención de realizar una nueva reserva o anotarse en lista de espera, **debes solicitar amablemente su identificación (número de unidad o piso y departamento, ej. "1° A") y su PIN**, si es que estos datos no han sido proporcionados previamente.
 
 2.  **VALIDACIÓN ESTRICTA DE NUEVAS RESERVAS (REGLAS DE SISTEMA):**
     *   Compara siempre la fecha solicitada por el usuario con la fecha actual del sistema (variable 'today').
     *   **Anticipación Máxima:** Si la fecha elegida supera la "Anticipación máxima permitida", rechaza e indica la fecha exacta de habilitación.
-    *   **Anticipación Mínima:** Si la regla indica que no se puede para hoy, rechaza e indica la fecha de mañana calculada (variable 'mañana_segun_hoy').
+    *   **Anticipación Mínima:** Si la regla indica que no se puede para hoy, rechaza e indica la fecha de mañana calculada.
     *   Respeta los límites de max_reservas_semana y max_reservas_mes provistos en la configuración.
 
-3.  **CONSULTA DE DISPONIBILIDAD (CRÍTICO):**
+3.  **CONSULTA DE DISPONIBILIDAD Y LISTA DE ESPERA (CRÍTICO):**
     *   Cuando un usuario pregunte por la disponibilidad de un día y turno específico (ej. "22/9 día?"), **debes consultar EXHAUSTIVAMENTE el "Listado general de reservas futuras" provisto en el contexto**.
-    *   **DEDUCCIÓN LÓGICA OBLIGATORIA:** Si en el listado NO aparece ninguna reserva para la FECHA y TURNO específicos que consulta el usuario, **DEBES RESPONDER CLARAMENTE QUE ESTÁ DISPONIBLE**. No digas "no tengo información". Si no está en la lista de ocupados, está libre.
-    *   *Ejemplo de respuesta correcta:* "El 22/9 por la mañana se encuentra disponible. ¡Aprovechá a reservar!"
-    *   Si SÍ aparece una reserva, infórmale amablemente que está ocupado (puedes indicar el nombre/unidad si el reglamento lo permite, pero prioriza la privacidad).
+    *   **DEDUCCIÓN LÓGICA OBLIGATORIA:** Si en el listado NO aparece ninguna reserva para la FECHA y TURNO específicos, **DEBES RESPONDER CLARAMENTE QUE ESTÁ DISPONIBLE**.
+    *   **SI EL TURNO ESTÁ OCUPADO:** 
+        - Infórmale amablemente que ya se encuentra reservado.
+        - **Ofrécele inmediatamente la posibilidad de sumarse a la Lista de Espera** para esa fecha y turno.
+        - Explícale la dinámica claramente: si el propietario actual cancela, el sistema le enviará un **correo electrónico automático** al instante avisando que quedó libre. Al liberarse, queda disponible **por estricto orden de llegada**, por lo que deberá ingresar rápido a tomarlo antes de que otro vecino lo reserve.
+        - Indícale que para anotarse debe proporcionarte su unidad y su PIN.
 
-4.  **FLUJO DE RESERVA EXITOSA:**
-    *   Una vez validado que la fecha, el turno y la unidad cumplen todas las reglas, **informa que la confirmación final se realiza a través del panel web**.
-
-5.  **REGLAMENTO Y DÍAS BLOQUEADOS:**
+4.  **REGLAMENTO Y DÍAS BLOQUEADOS:**
     *   Responde dudas basándote en el reglamento provisto.
     *   Si coincide con días bloqueados, informa que no está disponible.
 
-6.  **SEGURIDAD:**
+5.  **SEGURIDAD:**
     *   NUNCA reveles PINs de acceso a las unidades.
 `;
 
@@ -82,6 +83,8 @@ router.post('/ask', async (req, res) => {
 
     const reservations = readJsonFile(reservationsFile, []);
     const blockedDays = readJsonFile(blockedDaysFile, []);
+    const waitingList = readJsonFile(waitingFile, []);
+    
     const buildingConfig = readJsonFile(configFile, { 
       max_reservas_mes: 1, 
       max_reservas_semana: 1, 
@@ -98,15 +101,23 @@ router.post('/ask', async (req, res) => {
           .map(r => `Unidad: "${r.unit_id}" | Fecha: ${r.date} | Turno: ${r.turno} | Nombre: ${r.nombre || ''} ${r.apellido || ''}`)
       : [];
 
+    const activeWaiting = Array.isArray(waitingList)
+      ? waitingList
+          .filter(w => w && w.date >= today)
+          .map(w => `Unidad en espera: "${w.unit_id}" | Fecha: ${w.date} | Turno: ${w.turno}`)
+      : [];
+
     const contextData = `
 CONFIGURACIÓN VIGENTE EN EL SISTEMA (USAR ESTOS VALORES EXACTOS):
 - Máximo de reservas permitidas por semana: ${buildingConfig.max_reservas_semana}
 - Máximo de reservas permitidas por mes: ${buildingConfig.max_reservas_mes}
 - Anticipación máxima permitida: ${buildingConfig.dias_anticipacion_max} días desde hoy.
-- Anticipación mínima permitida: ${buildingConfig.dias_anticipacion_min} día(s) (Si es 1, no se puede reservar para el mismo día de hoy).
+- Anticipación mínima permitida: ${buildingConfig.dias_anticipacion_min} día(s).
 - Días bloqueados por administración: ${JSON.stringify(blockedDays)}
-- Listado general de reservas futuras en el edificio (Usar SOLO para chequear si una unidad tiene reservas o si un turno está ocupado): 
+- Listado general de reservas futuras en el edificio: 
 ${activeReservations.length > 0 ? activeReservations.join('\n') : 'Ninguna reserva futura registrada en el edificio'}
+- Listado actual de personas en Lista de Espera:
+${activeWaiting.length > 0 ? activeWaiting.join('\n') : 'Ninguna persona en lista de espera actualmente'}
 
 ---
 REGLAMENTO OFICIAL:
