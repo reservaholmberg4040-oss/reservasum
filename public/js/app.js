@@ -225,44 +225,37 @@ function fmtFecha(iso) {
   return `${dias[dt.getDay()]} ${d} de ${MESES[m - 1]} ${y}`;
 }
 
-async function openDayModal(iso) {
+function openDayModal(iso) {
   selectedDate = iso;
   const title = document.getElementById('dayModalTitle');
   const sub = document.getElementById('dayModalSub');
   if (title) title.textContent = fmtFecha(iso);
   
-  await loadBlockedDays(); 
-  const blockReason = blockedDaysMap[iso];
   const isPast = iso < todayISO();
-
-  if (sub) {
-    if (blockReason) {
-      sub.textContent = `⚠️ Día bloqueado por administración`;
-    } else {
-      sub.textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
-    }
-  }
+  if (sub) sub.textContent = isPast ? 'Fecha pasada' : 'Elegí un turno para ver el detalle o reservar';
 
   const info = reservationsByDate[iso] || { dia: null, noche: null };
   const cont = document.getElementById('turnosContainer');
   if (!cont) return;
 
-  if (blockReason) {
-    cont.innerHTML = `
-      <div class="turno-card" style="background: #fff5f5; border: 1px solid #feb2b2; padding: 16px; border-radius: 8px; text-align: center;">
-        <span class="status-pill" style="background: #e53e3e; color: white; padding: 4px 10px; border-radius: 4px; font-weight: bold;">No disponible</span>
-        <p style="margin-top: 12px; font-size: 1rem; color: #9b2c2c;">
-          <b>Motivo del bloqueo:</b><br>${blockReason}
-        </p>
-      </div>`;
-    toggleOverlay('dayOverlay', true);
-    return;
-  }
-
   cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
 
   cont.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => handleTurnoAction(btn.dataset.action, iso, btn.dataset.turno, btn.dataset.id, btn.dataset.unit));
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'new') {
+        toggleOverlay('dayOverlay', false);
+        openFormModal({ mode: 'new', date: iso, turno: btn.dataset.turno });
+      } else if (action === 'manage') {
+        toggleOverlay('dayOverlay', false);
+        goToTab('misreservas', btn.dataset.unit);
+      } else if (action === 'waiting') {
+        toggleOverlay('dayOverlay', false);
+        if (typeof window.openWaitingListModal === 'function') {
+          window.openWaitingListModal(btn.dataset.date, btn.dataset.turno);
+        }
+      }
+    });
   });
 
   toggleOverlay('dayOverlay', true);
