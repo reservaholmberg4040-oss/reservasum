@@ -4,11 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const db = require('../db'); 
-const { sendReservationConfirmation } = require('../utils/mailer');
+const { sendReservationConfirmation, sendWaitingListAlert } = require('../utils/mailer');
 
 const reservationsFile = path.join(__dirname, '../data/reservations.json');
 const blockedDaysFile = path.join(__dirname, '../data/blocked-days.json');
 const configFile = path.join(__dirname, '../data/config.json');
+const waitingFile = path.join(__dirname, '../data/waiting-list.json');
 
 // --- CONFIGURACIÓN DE RATE LIMITING ---
 const reservationLimiter = rateLimit({
@@ -70,6 +71,17 @@ function readConfig() {
     return JSON.parse(data);
   } catch (err) {
     return { max_reservas_mes: 4, max_reservas_semana: 1, dias_anticipacion_max: 60, dias_anticipacion_min: 0 };
+  }
+}
+
+function readWaitingList() {
+  try {
+    if (!fs.existsSync(waitingFile)) return [];
+    const data = fs.readFileSync(waitingFile, 'utf8');
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
   }
 }
 
@@ -268,7 +280,6 @@ router.post('/', reservationLimiter, pinLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Ese turno ya está ocupado.' });
     }
 
-    // Extracción segura del depto para evitar undefined
     const deptoVal = targetUnit.depto || targetUnit.dto || targetUnit.departamento || '';
     const pisoVal = targetUnit.piso || '';
 
@@ -426,6 +437,36 @@ router.delete('/:id', pinLimiter, (req, res) => {
     db.auditLogs.add('RESERVA_CANCELADA', `Se canceló la reserva de la Unidad ${reservation.unit_id} para el día ${reservation.date} (${reservation.turno})`, `Unidad ${reservation.unit_id}`);
 
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
+
+    // --- AUTOMATIZACIÓN: AVISAR A LA LISTA DE ESPERA ---
+    setImmediate(async () => {
+      try {
+        const waitingList = readWaitingList();
+        // Filtrar quienes están anotados exactamente para la misma fecha y turno
+        const matches = waitingList.filter(item => 
+          String(item.date) === String(reservation.date) && 
+          normalizeStr(item.turno) === normalizeStr(reservation.turno)
+        );
+
+        if (matches.length > 0) {
+          const units = db.units.all();
+          for (const entry of matches) {
+            const unitData = units.find(u => String(u.unidad || u.id) === String(entry.unit_id));
+            if (unitData && unitData.email && unitData.email.includes('@')) {
+              await sendWaitingListAlert(unitData.email, {
+                date: reservation.date,
+                turno: reservation.turno,
+                propietario: unitData.propietario || entry.propietario
+              });
+            }
+          }
+          console.log(`[waiting-list] Se enviaron avisos de disponibilidad para el ${reservation.date} (${reservation.turno}) a ${matches.length} unidades.`);
+        }
+      } catch (errMail) {
+        console.error('[WARNING] Error enviando alertas de lista de espera en segundo plano:', errMail.message);
+      }
+    });
+
   } catch (err) {
     console.error('Error al eliminar reserva:', err);
     res.status(500).json({ error: 'Error al eliminar la reserva.' });
