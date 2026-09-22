@@ -247,7 +247,10 @@ function renderTurnoCard(iso, turno, reserva, isPast) {
           <b>Unidad:</b> ${unidadLabel.trim()} (${propVal})<br>
           <b>Reservó:</b> ${reserva.nombre || ''} ${reserva.apellido || ''}
         </div>
-        ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
+        <div class="turno-actions" style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+          ${!isPast ? `<button class="btn btn-outline btn-sm" data-action="manage" data-unit="${reserva.unit_id}">Gestionar esta reserva (con PIN)</button>` : ''}
+          ${!isPast && typeof window.openWaitingListModal === 'function' ? `<button class="btn btn-secondary btn-sm" onclick="openWaitingListModal('${iso}', '${turno}')">📋 Anotarse en Lista de Espera</button>` : ''}
+        </div>
       </div>`;
   }
   return `
