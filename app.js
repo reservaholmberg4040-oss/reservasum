@@ -222,7 +222,21 @@ function openDayModal(iso) {
   cont.innerHTML = ['dia', 'noche'].map(turno => renderTurnoCard(iso, turno, info[turno], isPast)).join('');
 
   cont.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', () => handleTurnoAction(btn.dataset.action, iso, btn.dataset.turno, btn.dataset.id, btn.dataset.unit));
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'new') {
+        toggleOverlay('dayOverlay', false);
+        openFormModal({ mode: 'new', date: iso, turno: btn.dataset.turno });
+      } else if (action === 'manage') {
+        toggleOverlay('dayOverlay', false);
+        goToTab('misreservas', btn.dataset.unit);
+      } else if (action === 'waiting') {
+        toggleOverlay('dayOverlay', false);
+        if (typeof window.openWaitingListModal === 'function') {
+          window.openWaitingListModal(btn.dataset.date, btn.dataset.turno);
+        }
+      }
+    });
   });
 
   toggleOverlay('dayOverlay', true);
