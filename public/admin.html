@@ -42,6 +42,89 @@
     .form-row { display: flex; gap: 10px; margin-bottom: 12px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     .font-mono { font-family: monospace; }
+
+    /* --- ESTILOS RESPONSIVOS PARA MÓVILES --- */
+    @media (max-width: 768px) {
+      body {
+        padding: 10px;
+      }
+
+      .admin-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+
+      .admin-header h1 {
+        font-size: 1.5rem;
+        text-align: center;
+      }
+
+      .admin-header > div {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .admin-header .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .config-form, .block-day-form, .reports-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .config-form .form-group, 
+      .block-day-form .form-group, 
+      .reports-controls .form-group {
+        width: 100%;
+      }
+
+      .config-form input, 
+      .block-day-form input, 
+      .reports-controls input {
+        width: 100% !important;
+        box-sizing: border-box;
+      }
+
+      .admin-section {
+        padding: 12px;
+      }
+
+      .admin-section h2 {
+        font-size: 1.2rem;
+        word-break: break-word;
+      }
+
+      .section-header-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .action-buttons {
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .action-buttons .btn {
+        width: 100%;
+      }
+
+      #admin-calendar-grid {
+        grid-template-columns: repeat(7, minmax(36px, 1fr));
+        font-size: 0.75rem;
+      }
+
+      .modal-content, .modal-content-large {
+        max-width: 95% !important;
+        margin: 10px;
+        padding: 15px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+    }
   </style>
 </head>
 <body>
