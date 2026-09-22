@@ -469,19 +469,35 @@ router.delete('/:id', pinLimiter, (req, res) => {
 
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
 
-    // --- AUTOMATIZACIÓN: AVISAR Y LIMPIAR LA LISTA DE ESPERA ---
+// --- AUTOMATIZACIÓN: AVISAR Y LIMPIAR LA LISTA DE ESPERA ---
     setImmediate(async () => {
       try {
-        const waitingList = readWaitingList(); // Al leerse, ya se purgan automáticamente las vencidas
-        const matches = waitingList.filter(item => 
-          String(item.date) === String(reservation.date) && 
-          normalizeStr(item.turno) === normalizeStr(reservation.turno)
-        );
+        const waitingList = readWaitingList();
+        
+        // Función auxiliar para extraer solo los números (ej. "Unidad 0002" -> "2" o "0002")
+        const cleanUnitDigits = (str) => {
+          const match = String(str || '').match(/\d+/);
+          return match ? String(Number(match[0])) : '';
+        };
+
+        const targetDate = String(reservation.date).trim();
+        const targetTurno = normalizeStr(reservation.turno);
+
+        const matches = waitingList.filter(item => {
+          if (!item) return false;
+          return String(item.date).trim() === targetDate && 
+                 normalizeStr(item.turno) === targetTurno;
+        });
 
         if (matches.length > 0) {
           const units = db.units.all();
           for (const entry of matches) {
-            const unitData = units.find(u => String(u.unidad || u.id) === String(entry.unit_id));
+            const unitData = units.find(u => {
+              const uId = cleanUnitDigits(u.unidad || u.id);
+              const entryId = cleanUnitDigits(entry.unit_id);
+              return uId && entryId && uId === entryId;
+            });
+
             if (unitData && unitData.email && unitData.email.includes('@')) {
               await sendWaitingListAlert(unitData.email, {
                 date: reservation.date,
@@ -491,13 +507,15 @@ router.delete('/:id', pinLimiter, (req, res) => {
             }
           }
 
-          // QUITAR AUTOMÁTICAMENTE DE LA LISTA DE ESPERA LAS SOLICITUDES DE ESTE TURNO
-          const remainingWaitingList = waitingList.filter(item => 
-            !(String(item.date) === String(reservation.date) && 
-              normalizeStr(item.turno) === normalizeStr(reservation.turno))
-          );
-          writeWaitingList(remainingWaitingList);
+          // QUITAR AUTOMÁTICAMENTE DE LA LISTA DE ESPERA LAS SOLICITUDES DE ESTE TURNO Y FECHA
+          const remainingWaitingList = waitingList.filter(item => {
+            if (!item) return false;
+            const isSameDate = String(item.date).trim() === targetDate;
+            const isSameTurno = normalizeStr(item.turno) === targetTurno;
+            return !(isSameDate && isSameTurno);
+          });
 
+          writeWaitingList(remainingWaitingList);
           console.log(`[waiting-list] Se enviaron avisos y se limpió la lista para el ${reservation.date} (${reservation.turno}).`);
         }
       } catch (errMail) {
