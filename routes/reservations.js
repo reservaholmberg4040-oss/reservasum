@@ -74,14 +74,45 @@ function readConfig() {
   }
 }
 
+/**
+ * Lee la lista de espera y purga automáticamente aquellas cuya fecha ya haya expirado (pasado el día de hoy).
+ */
 function readWaitingList() {
   try {
     if (!fs.existsSync(waitingFile)) return [];
     const data = fs.readFileSync(waitingFile, 'utf8');
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    // Obtener la fecha actual en formato YYYY-MM-DD (hora local de Argentina)
+    const hoyStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).split('T')[0];
+
+    // Filtrar conservando solo las fechas iguales o futuras a hoy
+    const validList = parsed.filter(item => {
+      if (!item || !item.date) return false;
+      return String(item.date) >= hoyStr;
+    });
+
+    // Si se eliminaron elementos vencidos, guardamos la lista limpia automáticamente
+    if (validList.length !== parsed.length) {
+      fs.writeFileSync(waitingFile, JSON.stringify(validList, null, 2), 'utf8');
+      console.log(`[waiting-list] Se purgaron ${parsed.length - validList.length} solicitudes de espera vencidas.`);
+    }
+
+    return validList;
   } catch (err) {
+    console.error('Error leyendo/purgando waiting-list.json:', err);
     return [];
+  }
+}
+
+function writeWaitingList(data) {
+  try {
+    const dir = path.dirname(waitingFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(waitingFile, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error escribiendo waiting-list.json:', err);
   }
 }
 
@@ -438,11 +469,10 @@ router.delete('/:id', pinLimiter, (req, res) => {
 
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
 
-    // --- AUTOMATIZACIÓN: AVISAR A LA LISTA DE ESPERA ---
+    // --- AUTOMATIZACIÓN: AVISAR Y LIMPIAR LA LISTA DE ESPERA ---
     setImmediate(async () => {
       try {
-        const waitingList = readWaitingList();
-        // Filtrar quienes están anotados exactamente para la misma fecha y turno
+        const waitingList = readWaitingList(); // Al leerse, ya se purgan automáticamente las vencidas
         const matches = waitingList.filter(item => 
           String(item.date) === String(reservation.date) && 
           normalizeStr(item.turno) === normalizeStr(reservation.turno)
@@ -460,10 +490,18 @@ router.delete('/:id', pinLimiter, (req, res) => {
               });
             }
           }
-          console.log(`[waiting-list] Se enviaron avisos de disponibilidad para el ${reservation.date} (${reservation.turno}) a ${matches.length} unidades.`);
+
+          // QUITAR AUTOMÁTICAMENTE DE LA LISTA DE ESPERA LAS SOLICITUDES DE ESTE TURNO
+          const remainingWaitingList = waitingList.filter(item => 
+            !(String(item.date) === String(reservation.date) && 
+              normalizeStr(item.turno) === normalizeStr(reservation.turno))
+          );
+          writeWaitingList(remainingWaitingList);
+
+          console.log(`[waiting-list] Se enviaron avisos y se limpió la lista para el ${reservation.date} (${reservation.turno}).`);
         }
       } catch (errMail) {
-        console.error('[WARNING] Error enviando alertas de lista de espera en segundo plano:', errMail.message);
+        console.error('[WARNING] Error procesando lista de espera en segundo plano:', errMail.message);
       }
     });
 
