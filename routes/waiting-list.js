@@ -35,6 +35,7 @@ router.get('/', (req, res) => {
 });
 
 // Anotarse en lista de espera cuando un turno está ocupado
+// Anotarse en lista de espera cuando un turno está ocupado
 router.post('/', (req, res) => {
   try {
     const { date, turno, unit_id, nombre, apellido, unit_pin } = req.body;
@@ -51,6 +52,14 @@ router.post('/', (req, res) => {
 
     if (targetUnit.pin && String(targetUnit.pin) !== String(unit_pin)) {
       return res.status(400).json({ error: 'PIN incorrecto.' });
+    }
+
+    // NUEVA VALIDACIÓN: Verificar si esta unidad ya es la dueña de la reserva en este turno y fecha
+    const existingReservations = db.reservations.all ? db.reservations.all() : []; 
+    const currentReservation = existingReservations.find(r => r.date === date && r.turno === turno);
+    
+    if (currentReservation && String(currentReservation.unit_id) === String(unit_id)) {
+      return res.status(400).json({ error: 'No podés anotarte en la lista de espera de un turno que ya tenés reservado.' });
     }
 
     let list = readWaitingList();
