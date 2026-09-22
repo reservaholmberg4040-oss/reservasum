@@ -131,13 +131,109 @@
   </div>
 </div>
 
+<!-- Modal: Lista de espera -->
+<div class="overlay" id="waitingListOverlay">
+  <div class="modal" style="position:relative;max-width:450px;">
+    <button class="modal-close" id="closeWaitingModal">✕</button>
+    <h3>Anotarse en Lista de Espera</h3>
+    <p class="sub" id="waitingModalSub">Si se libera este turno, se te notificará.</p>
+    <div id="waitingAlert"></div>
+    <form id="waitingListForm">
+      <div class="form-group">
+        <label>Unidad</label>
+        <select id="waitingUnitSelect" required></select>
+      </div>
+      <div class="form-group">
+        <label>PIN de tu unidad</label>
+        <input type="text" id="waitingPinInput" maxlength="4" inputmode="numeric" placeholder="••••" required style="letter-spacing:6px;text-align:center;font-weight:700;max-width:140px">
+      </div>
+      <input type="hidden" id="waitingDate">
+      <input type="hidden" id="waitingTurno">
+      <button type="submit" class="btn btn-primary btn-block" id="submitWaitingBtn">Anotarme</button>
+    </form>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toastWrap"></div>
 
 <script src="/js/app.js"></script>
+<script>
+  // Script para manejar la apertura/cierre y envío del modal de Lista de Espera
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeWaiting = document.getElementById('closeWaitingModal');
+    const waitingOv = document.getElementById('waitingListOverlay');
+    const waitingForm = document.getElementById('waitingListForm');
+
+    if (closeWaiting) closeWaiting.addEventListener('click', () => waitingOv.classList.remove('show'));
+    if (waitingOv) waitingOv.addEventListener('click', (e) => { if (e.target.id === 'waitingListOverlay') waitingOv.classList.remove('show'); });
+
+    if (waitingForm) {
+      waitingForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const date = document.getElementById('waitingDate').value;
+        const turno = document.getElementById('waitingTurno').value;
+        const unit_id = document.getElementById('waitingUnitSelect').value;
+        const unit_pin = document.getElementById('waitingPinInput').value.trim();
+        const alertBox = document.getElementById('waitingAlert');
+        const submitBtn = document.getElementById('submitWaitingBtn');
+
+        alertBox.innerHTML = '';
+        if (!unit_id || !unit_pin) {
+          alertBox.innerHTML = `<div class="alert alert-error">Completá todos los campos.</div>`;
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Enviando...';
+
+        try {
+          const res = await fetch('/api/waiting-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, turno, unit_id, unit_pin })
+          });
+          const data = await res.json();
+          if (!res.ok) throw data;
+
+          toast('Te anotaste en la lista de espera con éxito 📋', 'success');
+          waitingOv.classList.remove('show');
+        } catch (err) {
+          alertBox.innerHTML = `<div class="alert alert-error">${err.error || 'Error al registrarse en la lista de espera.'}</div>`;
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Anotarme';
+        }
+      });
+    }
+  });
+
+  // Función global para abrir el modal de lista de espera desde app.js (cuando renderiza turnos ocupados)
+  window.openWaitingListModal = function(iso, turno) {
+    const waitingOv = document.getElementById('waitingListOverlay');
+    const sub = document.getElementById('waitingModalSub');
+    const rDate = document.getElementById('waitingDate');
+    const rTurno = document.getElementById('waitingTurno');
+    const unitSelect = document.getElementById('waitingUnitSelect');
+    const alertBox = document.getElementById('waitingAlert');
+    const form = document.getElementById('waitingListForm');
+
+    if (form) form.reset();
+    if (alertBox) alertBox.innerHTML = '';
+    if (rDate) rDate.value = iso;
+    if (rTurno) rTurno.value = turno;
+    if (sub) sub.textContent = `Turno ${turno === 'dia' ? 'Día ☀️' : 'Turno Noche 🌙'} del ${iso}`;
+
+    if (unitSelect && typeof units !== 'undefined') {
+      unitSelect.innerHTML = '<option value="">Seleccioná la unidad...</option>' +
+        units.map(u => `<option value="${u.unidad || u.id}">${unitLabel ? unitLabel(u) : (u.propietario || u.unidad)}</option>`).join('');
+    }
+
+    if (waitingOv) waitingOv.classList.add('show');
+  };
+</script>
 
 <!-- ================= START: ASISTENTE HOLMIA CHAT ================= -->
 <style>
-  /* Contenedor principal flotante (Alinea el globo y el botón) */
   .holmia-wrapper {
     position: fixed;
     bottom: 25px;
@@ -147,8 +243,6 @@
     align-items: center;
     gap: 12px;
   }
-
-  /* Globo de texto flotante */
   .holmia-tooltip-bubble {
     background: #ffffff;
     padding: 8px 14px;
@@ -160,7 +254,6 @@
     animation: holmiaPulseBubble 2.5s infinite alternate ease-in-out;
     cursor: pointer;
   }
-
   .holmia-tooltip-title {
     font-size: 11px;
     font-weight: 700;
@@ -168,20 +261,16 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
-
   .holmia-tooltip-text {
     font-size: 13px;
     color: #1e293b;
     font-weight: 600;
     white-space: nowrap;
   }
-
   @keyframes holmiaPulseBubble {
     0% { transform: translateY(0); }
     100% { transform: translateY(-4px); }
   }
-
-  /* Botón flotante (FAB) con efecto de pulso */
   #holmia-fab {
     width: 60px;
     height: 60px;
@@ -196,25 +285,20 @@
     transition: transform 0.2s ease, background-color 0.2s ease;
     animation: holmiaPulseBtn 2s infinite;
   }
-  
   #holmia-fab:hover {
     transform: scale(1.08);
     background-color: #0b5ed7;
   }
-
   #holmia-fab svg {
     width: 28px;
     height: 28px;
     fill: currentColor;
   }
-
   @keyframes holmiaPulseBtn {
     0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.5); }
     70% { box-shadow: 0 0 0 15px rgba(13, 110, 253, 0); }
     100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
   }
-
-  /* Ventana del Chat */
   #holmia-chat-window {
     position: fixed;
     bottom: 95px;
@@ -229,11 +313,9 @@
     flex-direction: column;
     z-index: 1050;
     overflow: hidden;
-    display: none; /* Oculto por defecto */
+    display: none;
     border: 1px solid rgba(0,0,0,0.1);
   }
-
-  /* Cabecera del chat */
   .holmia-header {
     background: #0d6efd;
     color: white;
@@ -250,8 +332,6 @@
     font-size: 1.2rem;
     cursor: pointer;
   }
-
-  /* Cuerpo de mensajes */
   .holmia-messages {
     flex: 1;
     padding: 15px;
@@ -262,7 +342,6 @@
     gap: 10px;
     font-size: 0.9rem;
   }
-
   .holmia-msg {
     max-width: 80%;
     padding: 10px 12px;
@@ -282,8 +361,6 @@
     align-self: flex-end;
     border-bottom-right-radius: 2px;
   }
-
-  /* Pie con input */
   .holmia-input-area {
     padding: 10px;
     background: white;
@@ -320,21 +397,16 @@
   }
 </style>
 
-<!-- Contenedor flotante unificado (Globo + Botón) -->
 <div class="holmia-wrapper">
-  <!-- Globo dinámico interactivo -->
   <div class="holmia-tooltip-bubble" onclick="toggleHolmiaChat()" title="Abrir chat con HolmIA">
     <span class="holmia-tooltip-title">✨ Asistente IA</span>
     <span class="holmia-tooltip-text">¡Preguntale a HolmIA!</span>
   </div>
-
-  <!-- Botón flotante (FAB) -->
   <div id="holmia-fab" title="Consultar con HolmIA" onclick="toggleHolmiaChat()">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
   </div>
 </div>
 
-<!-- Ventana de chat -->
 <div id="holmia-chat-window">
   <div class="holmia-header">
     <span>🤖 HolmIA - Asistente SUM</span>
@@ -375,7 +447,6 @@
 
     if (!text) return;
 
-    // Agregar mensaje del usuario a la vista
     const userDiv = document.createElement('div');
     userDiv.className = 'holmia-msg user';
     userDiv.textContent = text;
@@ -384,7 +455,6 @@
     input.value = '';
     container.scrollTop = container.scrollHeight;
 
-    // Recopilar el historial previo visible en la interfaz para mantener memoria en el backend
     const messageElements = container.querySelectorAll('.holmia-msg');
     const history = [];
     messageElements.forEach(el => {
@@ -395,10 +465,8 @@
       }
     });
 
-    // Excluimos el mensaje actual que acabamos de agregar del array de historial previo
     history.pop();
 
-    // Mensaje temporal de "Escribiendo..."
     const typingDiv = document.createElement('div');
     typingDiv.className = 'holmia-msg bot';
     typingDiv.textContent = 'HolmIA está escribiendo...';
