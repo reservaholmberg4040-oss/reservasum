@@ -6,6 +6,7 @@ const db = require('../db');
 const { requireAdmin } = require('./admin');
 
 const waitingFile = path.join(__dirname, '../data/waiting-list.json');
+const reservationsFile = path.join(__dirname, '../data/reservations.json');
 
 function readWaitingList() {
   try {
@@ -24,6 +25,17 @@ function writeWaitingList(data) {
   fs.writeFileSync(waitingFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function readReservations() {
+  try {
+    if (!fs.existsSync(reservationsFile)) return [];
+    const data = fs.readFileSync(reservationsFile, 'utf8');
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
 // Obtener lista de espera (Público o Admin)
 router.get('/', (req, res) => {
   try {
@@ -34,7 +46,6 @@ router.get('/', (req, res) => {
   }
 });
 
-// Anotarse en lista de espera cuando un turno está ocupado
 // Anotarse en lista de espera cuando un turno está ocupado
 router.post('/', (req, res) => {
   try {
@@ -54,8 +65,8 @@ router.post('/', (req, res) => {
       return res.status(400).json({ error: 'PIN incorrecto.' });
     }
 
-    // NUEVA VALIDACIÓN: Verificar si esta unidad ya es la dueña de la reserva en este turno y fecha
-    const existingReservations = db.reservations.all ? db.reservations.all() : []; 
+    // Validar si esta unidad ya es la dueña de la reserva en este turno y fecha
+    const existingReservations = readReservations();
     const currentReservation = existingReservations.find(r => r.date === date && r.turno === turno);
     
     if (currentReservation && String(currentReservation.unit_id) === String(unit_id)) {
