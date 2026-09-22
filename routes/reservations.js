@@ -515,6 +515,10 @@ router.delete('/:id', pinLimiter, (req, res) => {
             }
           }
 
+          // --- [CORRECCIÓN: AUDITORÍA DE ENVÍO DE ALERTAS] ---
+          // Registramos en el log general que se enviaron los avisos a la lista de espera.
+          db.auditLogs.add('LISTA_ESPERA_AVISOS_ENVIADOS', `Se liberó el ${date} (${turno}) y se enviaron avisos a ${matches.length} unidades en lista de espera (por cancelación de unidad ${reservation.unit_id})`, `SISTEMA/CRON`);
+          
           // Filtrar para remover de la lista los que coincidan con la fecha y turno cancelado
           const remainingWaitingList = waitingList.filter(item => {
             if (!item) return false;
