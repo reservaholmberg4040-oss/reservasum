@@ -3,13 +3,14 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const cookieSession = require('cookie-session');
-const helmet = require('helmet'); // <-- 1. Importar helmet
+const helmet = require('helmet');
 
 const db = require('./db');
 const unitsRouter = require('./routes/units');
 const reservationsRouter = require('./routes/reservations');
 const adminRouter = require('./routes/admin');
 const chatRouter = require('./routes/chat');
+const waitingListRouter = require('./routes/waiting-list'); // <-- NUEVO: Importar rutas de lista de espera
 const { requireAdmin } = require('./routes/admin');
 const { scheduleMonthlyReport } = require('./utils/mailer');
 
@@ -18,7 +19,6 @@ const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
 
-// --- 2. USAR HELMET PARA CABECERAS DE SEGURIDAD ---
 app.use(helmet({
   contentSecurityPolicy: false, 
 }));
@@ -39,7 +39,6 @@ app.get('/api/config', (req, res) => {
   res.json({ buildingName: process.env.BUILDING_NAME || 'Holmberg 4040' });
 });
 
-// --- ENDPOINTS DE CONFIGURACIÓN GENERAL ---
 app.get('/api/admin/config', requireAdmin, async (req, res) => {
   try {
     const configFile = path.join(__dirname, 'data', 'config.json');
@@ -94,7 +93,8 @@ app.post('/api/admin/config', requireAdmin, async (req, res) => {
 app.use('/api/reservations', reservationsRouter);
 app.use('/api/units', unitsRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/chat', chatRouter); // <-- NUEVO: Registrar endpoint del chat IA
+app.use('/api/chat', chatRouter);
+app.use('/api/waiting-list', waitingListRouter); // <-- NUEVO: Endpoint de lista de espera
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -104,7 +104,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// --- 3. MANEJADOR GLOBAL DE ERRORES ---
 app.use((err, req, res, next) => {
   console.error('[ERROR NO CAPTURADO]:', err.stack || err);
   
