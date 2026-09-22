@@ -470,31 +470,39 @@ router.delete('/:id', pinLimiter, (req, res) => {
     res.json({ success: true, message: 'Reserva eliminada correctamente.' });
 
 // --- AUTOMATIZACIÓN: AVISAR Y LIMPIAR LA LISTA DE ESPERA ---
+// --- AUTOMATIZACIÓN: AVISAR Y LIMPIAR LA LISTA DE ESPERA ---
     setImmediate(async () => {
       try {
-        const waitingList = readWaitingList();
-        
-        // Función auxiliar para extraer solo los números (ej. "Unidad 0002" -> "2" o "0002")
-        const cleanUnitDigits = (str) => {
+        const waitingFile = path.join(__dirname, '../data/waiting-list.json');
+        if (!fs.existsSync(waitingFile)) return;
+
+        const rawData = fs.readFileSync(waitingFile, 'utf8');
+        const waitingList = JSON.parse(rawData);
+        if (!Array.isArray(waitingList) || waitingList.length === 0) return;
+
+        // Normalizador local seguro para evitar errores
+        const norm = (str) => String(str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const cleanDigits = (str) => {
           const match = String(str || '').match(/\d+/);
           return match ? String(Number(match[0])) : '';
         };
 
         const targetDate = String(reservation.date).trim();
-        const targetTurno = normalizeStr(reservation.turno);
+        const targetTurno = norm(reservation.turno);
+
+        console.log(`[waiting-list] Buscando pendientes para fecha: ${targetDate}, turno: ${targetTurno}`);
 
         const matches = waitingList.filter(item => {
           if (!item) return false;
-          return String(item.date).trim() === targetDate && 
-                 normalizeStr(item.turno) === targetTurno;
+          return String(item.date).trim() === targetDate && norm(item.turno) === targetTurno;
         });
 
         if (matches.length > 0) {
           const units = db.units.all();
           for (const entry of matches) {
             const unitData = units.find(u => {
-              const uId = cleanUnitDigits(u.unidad || u.id);
-              const entryId = cleanUnitDigits(entry.unit_id);
+              const uId = cleanDigits(u.unidad || u.id);
+              const entryId = cleanDigits(entry.unit_id);
               return uId && entryId && uId === entryId;
             });
 
@@ -507,19 +515,21 @@ router.delete('/:id', pinLimiter, (req, res) => {
             }
           }
 
-          // QUITAR AUTOMÁTICAMENTE DE LA LISTA DE ESPERA LAS SOLICITUDES DE ESTE TURNO Y FECHA
+          // Filtrar para remover de la lista los que coincidan con la fecha y turno cancelado
           const remainingWaitingList = waitingList.filter(item => {
             if (!item) return false;
             const isSameDate = String(item.date).trim() === targetDate;
-            const isSameTurno = normalizeStr(item.turno) === targetTurno;
+            const isSameTurno = norm(item.turno) === targetTurno;
             return !(isSameDate && isSameTurno);
           });
 
-          writeWaitingList(remainingWaitingList);
-          console.log(`[waiting-list] Se enviaron avisos y se limpió la lista para el ${reservation.date} (${reservation.turno}).`);
+          fs.writeFileSync(waitingFile, JSON.stringify(remainingWaitingList, null, 2), 'utf8');
+          console.log(`[waiting-list] Éxito: Se eliminaron ${matches.length} registros de la lista de espera.`);
+        } else {
+          console.log('[waiting-list] No se encontraron registros coincidentes en la lista de espera.');
         }
       } catch (errMail) {
-        console.error('[WARNING] Error procesando lista de espera en segundo plano:', errMail.message);
+        console.error('[ERROR CRÍTICO waiting-list]:', errMail);
       }
     });
 
